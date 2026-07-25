@@ -37,6 +37,7 @@ import { DataImportModal } from './components/import/DataImportModal';
 import { PrintModal } from './components/print/PrintModal';
 import { TemplateGalleryModal } from './components/templates/TemplateGalleryModal';
 import { ExportModal } from './components/export/ExportModal';
+import { UpdateManagerModal } from './components/common/UpdateManagerModal';
 
 import { GalleryView } from './components/views/GalleryView';
 import { DatasetView } from './components/views/DatasetView';
@@ -169,6 +170,7 @@ export default function App() {
   const [autoPrintTrigger, setAutoPrintTrigger] = useState(false);
   const [isTemplatesModalOpen, setIsTemplatesModalOpen] = useState(false);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
 
   const handleOpenPrintModal = (autoPrint = false) => {
     setAutoPrintTrigger(autoPrint);
@@ -534,6 +536,7 @@ export default function App() {
           datasetCount={dataset.length}
           authUser={authUser}
           onOpenAuthModal={() => setIsAuthModalOpen(true)}
+          onOpenUpdateModal={() => setIsUpdateModalOpen(true)}
           onLogout={async () => {
             await logoutUser();
             showToast('Đã đăng xuất', 'Bạn đã quay về phiên làm việc Khách.', 'info');
@@ -807,6 +810,11 @@ export default function App() {
         template={{ ...currentTemplate, elements }}
         generatedLabels={generatedLabels}
         sampleDataRow={sampleDataRow}
+      />
+
+      <UpdateManagerModal
+        isOpen={isUpdateModalOpen}
+        onClose={() => setIsUpdateModalOpen(false)}
       />
 
       <ToastNotification

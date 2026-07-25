@@ -14,6 +14,7 @@ import {
   LogOut,
   LogIn,
   Check,
+  Sparkles,
 } from 'lucide-react';
 import { User } from 'firebase/auth';
 import { LabelTemplate } from '../../types/label';
@@ -32,6 +33,7 @@ interface HeaderProps {
   authUser: User | null;
   onOpenAuthModal: () => void;
   onLogout: () => void;
+  onOpenUpdateModal?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -48,6 +50,7 @@ export const Header: React.FC<HeaderProps> = ({
   authUser,
   onOpenAuthModal,
   onLogout,
+  onOpenUpdateModal,
 }) => {
   const [showUserMenu, setShowUserMenu] = useState(false);
 
@@ -154,6 +157,19 @@ export const Header: React.FC<HeaderProps> = ({
           <Printer className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-600 dark:text-blue-400 shrink-0" />
           <span className="hidden md:inline whitespace-nowrap">Cấu Hình In</span>
         </button>
+
+        {/* Auto Update EXE Button */}
+        {onOpenUpdateModal && (
+          <button
+            type="button"
+            onClick={onOpenUpdateModal}
+            className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1.5 text-xs font-semibold text-blue-700 dark:text-blue-300 bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/60 dark:hover:bg-blue-900/60 border border-blue-200 dark:border-blue-800/80 rounded-lg transition-all cursor-pointer shrink-0 shadow-xs"
+            title="Kiểm tra & Tự động cập nhật ứng dụng EXE"
+          >
+            <Sparkles className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-600 dark:text-blue-400 shrink-0" />
+            <span className="hidden xl:inline whitespace-nowrap">Cập Nhật EXE</span>
+          </button>
+        )}
 
         {/* Dark mode toggle */}
         <button
