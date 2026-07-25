@@ -1,0 +1,6 @@
+{
+  "name": "QR Label Generator Pro",
+  "description": "Phần mềm thiết kế và in tem nhãn QR code / Barcode chuyên nghiệp cho cửa hàng điện thoại và bán lẻ",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

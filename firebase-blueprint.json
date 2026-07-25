@@ -1,0 +1,31 @@
+{
+  "entities": {
+    "Template": {
+      "title": "Label Template",
+      "description": "Custom or saved label templates",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "widthMm": { "type": "number" },
+        "heightMm": { "type": "number" },
+        "elements": { "type": "array" },
+        "category": { "type": "string" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["id", "name", "widthMm", "heightMm"]
+    },
+    "AppSettings": {
+      "title": "App Settings",
+      "description": "Global application preferences and active label config",
+      "properties": {
+        "currentTemplateId": { "type": "string" },
+        "currentTemplate": { "type": "object" },
+        "elements": { "type": "array" },
+        "dataset": { "type": "array" },
+        "darkMode": { "type": "boolean" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["updatedAt"]
+    }
+  }
+}
