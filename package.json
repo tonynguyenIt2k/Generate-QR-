@@ -8,6 +8,7 @@
     "dev": "vite --port=3000 --host=0.0.0.0",
     "build": "vite build",
     "build:exe": "vite build && electron-builder --win nsis portable",
+    "dist": "npm run build:exe",
     "electron:start": "electron .",
     "electron:dev": "NODE_ENV=development electron .",
     "preview": "vite preview",

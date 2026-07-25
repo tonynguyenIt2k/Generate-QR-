@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, LogIn, UserPlus, Mail, Lock, ShieldAlert, CheckCircle2, ExternalLink, Info } from 'lucide-react';
+import { X, LogIn, UserPlus, Mail, Lock, ShieldAlert, CheckCircle2, ExternalLink, Globe } from 'lucide-react';
 import { signInWithGoogle, signInWithEmail, signUpWithEmail } from '../../lib/firebase';
 
 interface AuthModalProps {
@@ -17,6 +17,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
 
   if (!isOpen) return null;
 
+  const WEB_APP_URL = 'https://ais-dev-pjrooggrb3rgcp3ujaoui5-816846408329.asia-southeast1.run.app';
+
+  const handleOpenBrowser = () => {
+    if (typeof window !== 'undefined' && window.electronAPI?.openExternal) {
+      window.electronAPI.openExternal(WEB_APP_URL);
+    } else {
+      window.open(WEB_APP_URL, '_blank');
+    }
+  };
+
   const handleGoogleSignIn = async () => {
     setLoading(true);
     setErrorMsg(null);
@@ -26,8 +36,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
       onClose();
     } catch (err: any) {
       console.error('Google Auth Error:', err);
-      if (err.code === 'auth/unauthorized-domain' || err.message?.includes('unauthorized-domain')) {
-        setErrorMsg('auth/unauthorized-domain');
+      const isElectron = typeof window !== 'undefined' && window.electronAPI?.isElectron;
+      if (isElectron || err.code === 'auth/unauthorized-domain' || err.code === 'auth/operation-not-supported-in-this-environment') {
+        setErrorMsg('electron_google_auth_notice');
       } else {
         setErrorMsg(err.message || 'Đăng nhập Google thất bại. Vui lòng thử lại.');
       }
@@ -100,33 +111,31 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
 
         {/* Content */}
         <div className="p-6 space-y-5">
-          {errorMsg === 'auth/unauthorized-domain' ? (
-            <div className="p-4 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/80 rounded-2xl text-xs space-y-2">
+          {errorMsg === 'electron_google_auth_notice' || errorMsg === 'auth/unauthorized-domain' ? (
+            <div className="p-4 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/80 rounded-2xl text-xs space-y-2.5 animate-fade-in">
               <div className="flex items-center gap-2 font-bold text-amber-800 dark:text-amber-300">
                 <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0" />
-                <span>Đăng Nhập Google Trên Bản Desktop EXE</span>
+                <span>Đăng Nhập Google Trên Ứng Dụng Desktop</span>
               </div>
               <p className="text-amber-900/80 dark:text-amber-200/90 leading-relaxed text-[11px]">
-                Google Firebase quy định bảo mật chặn Popup OAuth khi ứng dụng chạy từ tập tin máy tính cục bộ (<code className="font-mono bg-amber-100 dark:bg-amber-900/60 px-1 py-0.5 rounded text-[10px]">file://</code>).
+                Google Firebase quy định bảo mật chặn cửa sổ Popup 1-click khi chạy từ file máy tính cục bộ (<code className="font-mono bg-amber-100 dark:bg-amber-900/60 px-1 py-0.5 rounded text-[10px]">file://</code>).
               </p>
+              
+              <button
+                type="button"
+                onClick={handleOpenBrowser}
+                className="w-full py-2 px-3 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 transition-colors cursor-pointer shadow-xs"
+              >
+                <Globe className="w-3.5 h-3.5" /> Mở Trình Duyệt Chrome / Edge Đăng Nhập
+              </button>
+
               <div className="pt-1 space-y-1 text-[11px]">
-                <div className="font-semibold text-amber-900 dark:text-amber-100">👉 Cách đăng nhập nhanh nhất:</div>
-                <ul className="list-disc pl-4 space-y-1 text-slate-700 dark:text-slate-300">
-                  <li><strong>Trên App EXE này:</strong> Dùng Email & Mật khẩu bên dưới (Có thể dùng chính Gmail của bạn, bấm <strong>&ldquo;Tạo Tài Khoản Mới&rdquo;</strong>).</li>
-                  <li><strong>Trên Trình Duyệt Web:</strong> Bản Web hỗ trợ nút Google Sign-In 1-click trực tiếp.</li>
+                <div className="font-semibold text-amber-900 dark:text-amber-100">👉 Đăng nhập nhanh trực tiếp trên app EXE:</div>
+                <ul className="list-disc pl-4 space-y-0.5 text-slate-700 dark:text-slate-300">
+                  <li>Vui lòng gõ <strong>Email + Mật khẩu</strong> ở khung bên dưới.</li>
+                  <li>Nếu chưa có tài khoản, gõ Email của bạn và bấm <strong>&ldquo;Tạo Tài Khoản Mới&rdquo;</strong>.</li>
                 </ul>
               </div>
-              {typeof window !== 'undefined' && window.electronAPI?.openExternal && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    window.electronAPI?.openExternal?.('https://ais-pre-pjrooggrb3rgcp3ujaoui5-816846408329.asia-southeast1.run.app');
-                  }}
-                  className="mt-2 w-full py-2 px-3 bg-amber-600 hover:bg-amber-700 text-white font-medium rounded-xl text-[11px] flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-xs"
-                >
-                  <ExternalLink className="w-3.5 h-3.5" /> Mở Bản Web Trình Duyệt Để Đăng Nhập Google
-                </button>
-              )}
             </div>
           ) : errorMsg ? (
             <div className="p-3.5 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800/60 rounded-2xl flex items-start gap-2.5 text-xs text-red-700 dark:text-red-300">
@@ -161,6 +170,18 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
             </svg>
             <span>Tiếp tục với Google</span>
           </button>
+
+          {typeof window !== 'undefined' && window.electronAPI?.isElectron && (
+            <div className="text-center -mt-2">
+              <button
+                type="button"
+                onClick={handleOpenBrowser}
+                className="text-[11px] text-amber-600 dark:text-amber-400 hover:underline inline-flex items-center gap-1 font-medium cursor-pointer"
+              >
+                <Globe className="w-3 h-3" /> Mở trình duyệt Web để đăng nhập Google
+              </button>
+            </div>
+          )}
 
           <div className="relative flex items-center justify-center">
             <div className="border-t border-slate-200 dark:border-slate-800 w-full" />
