@@ -17,6 +17,7 @@ export interface ElectronAPI {
   checkForUpdate: () => void;
   downloadUpdate: () => void;
   quitAndInstall: () => void;
+  openExternal?: (url: string) => void;
   onUpdateAvailable: (callback: (info: UpdateInfo) => void) => () => void;
   onUpdateNotAvailable: (callback: (info: UpdateInfo) => void) => () => void;
   onDownloadProgress: (callback: (progress: DownloadProgress) => void) => () => void;

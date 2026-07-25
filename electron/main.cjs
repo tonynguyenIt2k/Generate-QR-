@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, ipcMain } = require('electron');
+const { app, BrowserWindow, Menu, ipcMain, shell } = require('electron');
 const path = require('path');
 const { autoUpdater } = require('electron-updater');
 
@@ -74,6 +74,12 @@ ipcMain.on('download-update', () => {
 
 ipcMain.on('quit-and-install', () => {
   autoUpdater.quitAndInstall(false, true);
+});
+
+ipcMain.on('open-external', (event, url) => {
+  if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
+    shell.openExternal(url);
+  }
 });
 
 // AutoUpdater events forwarding to renderer process

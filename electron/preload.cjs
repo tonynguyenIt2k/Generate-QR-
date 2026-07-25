@@ -6,6 +6,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   checkForUpdate: () => ipcRenderer.send('check-for-update'),
   downloadUpdate: () => ipcRenderer.send('download-update'),
   quitAndInstall: () => ipcRenderer.send('quit-and-install'),
+  openExternal: (url) => ipcRenderer.send('open-external', url),
   
   // Event listeners
   onUpdateAvailable: (callback) => {
