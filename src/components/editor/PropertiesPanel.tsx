@@ -164,7 +164,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                 onClick={() => insertVariable(v)}
                 className="px-1.5 py-0.5 text-[10px] bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 rounded font-mono border border-blue-200 dark:border-blue-800 cursor-pointer"
               >
-                +{'{{' + v + '}}'}
+                + [{v}]
               </button>
             ))}
           </div>

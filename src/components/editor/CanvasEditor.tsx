@@ -38,7 +38,7 @@ interface CanvasEditorProps {
   elements: LabelElement[];
   selectedElementId: string | null;
   onSelectElement: (id: string | null) => void;
-  onUpdateElement: (updated: LabelElement) => void;
+  onUpdateElement: (updated: LabelElement, saveHistory?: boolean) => void;
   onAddElement?: (element: Partial<LabelElement>) => void;
   onDeleteElement?: (id?: string) => void;
   onDuplicateElement?: (id?: string) => void;
@@ -846,7 +846,7 @@ export const CanvasEditor: React.FC<CanvasEditorProps> = ({
                 )}
 
                 {/* Direct On-Canvas Text Editing Input */}
-                {isEditing ? (
+                {isEditing && el.type === 'text' ? (
                   <div
                     className="w-full h-full relative z-40 bg-white/90 dark:bg-slate-900/90 rounded border-2 border-blue-600 p-0.5 shadow-lg flex items-center"
                     onClick={(e) => e.stopPropagation()}
@@ -870,9 +870,9 @@ export const CanvasEditor: React.FC<CanvasEditorProps> = ({
                           setEditingTextId(null);
                         }
                       }}
-                      className="w-full h-full bg-transparent resize-none border-none outline-none leading-tight font-sans text-slate-900 p-0"
+                      className="w-full h-full bg-transparent resize-none border-none outline-none leading-tight font-sans text-slate-900 dark:text-slate-100 p-0"
                       style={{
-                        fontSize: `${el.fontSize * (zoom * 1.33)}px`,
+                        fontSize: `${(el.fontSize || 9) * (zoom * 1.33)}px`,
                         fontFamily: el.fontFamily || 'sans-serif',
                         fontWeight: el.fontWeight || 'normal',
                         fontStyle: el.fontStyle || 'normal',

@@ -10,7 +10,7 @@ import {
   CheckCircle2,
   Code,
 } from 'lucide-react';
-import { DatasetRow } from '../../types/label';
+import { DatasetRow, LabelElement } from '../../types/label';
 import { generateSamplePhoneShopExcel, parseExcelOrCsvFile } from '../../utils/excelHelper';
 
 interface DataImportModalProps {
@@ -18,6 +18,7 @@ interface DataImportModalProps {
   onClose: () => void;
   dataset: DatasetRow[];
   onSetDataset: (rows: DatasetRow[]) => void;
+  elements?: LabelElement[];
 }
 
 export const DataImportModal: React.FC<DataImportModalProps> = ({
@@ -25,6 +26,7 @@ export const DataImportModal: React.FC<DataImportModalProps> = ({
   onClose,
   dataset,
   onSetDataset,
+  elements,
 }) => {
   const [activeSubTab, setActiveSubTab] = useState<'upload' | 'manual' | 'help'>('upload');
   const [manualText, setManualText] = useState<string>(
@@ -160,7 +162,7 @@ export const DataImportModal: React.FC<DataImportModalProps> = ({
                   </label>
 
                   <button
-                    onClick={generateSamplePhoneShopExcel}
+                    onClick={() => generateSamplePhoneShopExcel(elements)}
                     className="flex items-center gap-1.5 px-4 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 font-semibold rounded-xl hover:bg-slate-100 transition-colors cursor-pointer"
                   >
                     <Download className="w-4 h-4 text-emerald-600" />

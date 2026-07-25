@@ -22,7 +22,7 @@ import {
   AlertCircle,
   Save,
 } from 'lucide-react';
-import { DatasetRow } from '../../types/label';
+import { DatasetRow, LabelElement } from '../../types/label';
 import { generateSamplePhoneShopExcel } from '../../utils/excelHelper';
 import {
   ConfirmModal,
@@ -35,12 +35,14 @@ interface DatasetViewProps {
   dataset: DatasetRow[];
   onSetDataset: React.Dispatch<React.SetStateAction<DatasetRow[]>>;
   onOpenImportModal: () => void;
+  elements?: LabelElement[];
 }
 
 export const DatasetView: React.FC<DatasetViewProps> = ({
   dataset,
   onSetDataset,
   onOpenImportModal,
+  elements,
 }) => {
   // Extract all existing keys across dataset
   const allKeys = Array.from(
@@ -336,7 +338,7 @@ export const DatasetView: React.FC<DatasetViewProps> = ({
             <span>Tải File Excel Ngay</span>
           </button>
           <button
-            onClick={generateSamplePhoneShopExcel}
+            onClick={() => generateSamplePhoneShopExcel(elements)}
             className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 font-bold rounded-xl text-xs hover:bg-slate-50 transition-colors cursor-pointer"
           >
             <Download className="w-4 h-4 text-emerald-600" />
@@ -480,8 +482,8 @@ export const DatasetView: React.FC<DatasetViewProps> = ({
                   >
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-1.5 overflow-hidden">
-                        <span className="text-emerald-600 dark:text-emerald-400 font-bold truncate">
-                          {`{{${header}}}`}
+                        <span className="text-emerald-700 dark:text-emerald-300 font-bold truncate">
+                          {header}
                         </span>
                         {copiedCol === header && (
                           <span className="text-[10px] text-blue-600 font-sans font-bold bg-blue-50 px-1 rounded">

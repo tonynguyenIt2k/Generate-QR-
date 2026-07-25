@@ -15,7 +15,11 @@ import {
   subscribeAppSettingsFromFirebase,
   saveTemplateToFirebase,
   subscribeTemplatesFromFirebase,
+  subscribeAuthState,
+  logoutUser,
 } from './lib/firebase';
+import { User } from 'firebase/auth';
+import { AuthModal } from './components/auth/AuthModal';
 import { ToastNotification, ToastState } from './components/common/CustomAlert';
 import { useLabelHistory } from './hooks/useLabelHistory';
 import { useHotkeys } from './hooks/useHotkeys';
@@ -40,9 +44,56 @@ import { SettingsView } from './components/views/SettingsView';
 import { generateBulkLabelsAsync } from './utils/bulkEngine';
 
 export default function App() {
-  const [darkMode, setDarkMode] = useState(false);
+  const [darkMode, setDarkMode] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('qr_label_dark_mode');
+      if (saved !== null) return JSON.parse(saved);
+    } catch {
+      // ignore
+    }
+    return false;
+  });
+
+  useEffect(() => {
+    if (darkMode) {
+      document.documentElement.classList.add('dark');
+      document.body.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+      document.body.classList.remove('dark');
+    }
+  }, [darkMode]);
+
+  const handleToggleDarkMode = (newVal?: boolean) => {
+    const nextVal = newVal !== undefined ? newVal : !darkMode;
+    setDarkMode(nextVal);
+    darkModeRef.current = nextVal;
+    if (nextVal) {
+      document.documentElement.classList.add('dark');
+      document.body.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+      document.body.classList.remove('dark');
+    }
+    try {
+      localStorage.setItem('qr_label_dark_mode', JSON.stringify(nextVal));
+    } catch {
+      // ignore
+    }
+    saveAppSettingsToFirebase({
+      currentTemplate: currentTemplateRef.current,
+      elements: elementsRef.current,
+      dataset: datasetRef.current,
+      darkMode: nextVal,
+    });
+  };
+
   const [activeTab, setActiveTab] = useState<MainTab>('editor');
   const [mobileEditorTab, setMobileEditorTab] = useState<'canvas' | 'palette' | 'layers' | 'properties'>('canvas');
+
+  // Auth state
+  const [authUser, setAuthUser] = useState<User | null>(null);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
   // Templates state
   const [allTemplates, setAllTemplates] = useState<LabelTemplate[]>(() => getAllTemplates());
@@ -186,7 +237,15 @@ export default function App() {
     };
   }, [elements, dataset, currentTemplate]);
 
-  // Firebase Realtime Subscriptions
+  // Auth state listener
+  useEffect(() => {
+    const unsub = subscribeAuthState((u) => {
+      setAuthUser(u);
+    });
+    return () => unsub();
+  }, []);
+
+  // Firebase Realtime Subscriptions (re-run when authUser changes)
   useEffect(() => {
     // 1. Subscribe to Remote Custom Templates
     const unsubscribeTemplates = subscribeTemplatesFromFirebase((remoteTemplates) => {
@@ -238,7 +297,7 @@ export default function App() {
       unsubscribeTemplates();
       unsubscribeSettings();
     };
-  }, []);
+  }, [authUser]);
 
   // Debounced Auto-save App Settings to Firebase
   useEffect(() => {
@@ -465,7 +524,7 @@ export default function App() {
         <Header
           currentTemplate={currentTemplate}
           darkMode={darkMode}
-          setDarkMode={setDarkMode}
+          setDarkMode={handleToggleDarkMode}
           onOpenTemplates={() => setIsTemplatesModalOpen(true)}
           onOpenImportModal={() => setIsImportModalOpen(true)}
           onOpenPrintModal={handleOpenPrintModal}
@@ -473,6 +532,12 @@ export default function App() {
           onSaveTemplate={handleSaveCurrentTemplate}
           onNewTemplate={() => setIsTemplatesModalOpen(true)}
           datasetCount={dataset.length}
+          authUser={authUser}
+          onOpenAuthModal={() => setIsAuthModalOpen(true)}
+          onLogout={async () => {
+            await logoutUser();
+            showToast('Đã đăng xuất', 'Bạn đã quay về phiên làm việc Khách.', 'info');
+          }}
         />
 
         {/* Main Workspace Body */}
@@ -660,6 +725,7 @@ export default function App() {
               dataset={dataset}
               onSetDataset={setDataset}
               onOpenImportModal={() => setIsImportModalOpen(true)}
+              elements={elements}
             />
           )}
 
@@ -709,6 +775,12 @@ export default function App() {
         onClose={() => setIsImportModalOpen(false)}
         dataset={dataset}
         onSetDataset={setDataset}
+        elements={elements}
+      />
+
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
       />
 
       <PrintModal

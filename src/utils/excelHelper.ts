@@ -1,5 +1,28 @@
 import * as XLSX from 'xlsx';
-import { DatasetRow } from '../types/label';
+import { DatasetRow, LabelElement } from '../types/label';
+
+/**
+ * Extracts variable names (e.g. ['Model', 'Serial']) from label elements.
+ */
+export function extractVariablesFromElements(elements: LabelElement[]): string[] {
+  const varsSet = new Set<string>();
+  const regex = /\{\{\s*([a-zA-Z0-9_]+)(?:\s*\|\s*[a-zA-Z0-9_]+)?\s*\}\}/g;
+
+  elements.forEach((el) => {
+    if ('content' in el && typeof el.content === 'string') {
+      let match;
+      // Reset regex index
+      regex.lastIndex = 0;
+      while ((match = regex.exec(el.content)) !== null) {
+        if (match[1]) {
+          varsSet.add(match[1]);
+        }
+      }
+    }
+  });
+
+  return Array.from(varsSet);
+}
 
 /**
  * Parses uploaded Excel or CSV file into an array of key-value dataset rows.
@@ -43,10 +66,10 @@ export async function parseExcelOrCsvFile(file: File): Promise<{ rows: DatasetRo
 }
 
 /**
- * Generates sample Phone Shop Data Excel workbook and triggers download.
+ * Generates sample Phone Shop Data Excel workbook matching template variables.
  */
-export function generateSamplePhoneShopExcel(): void {
-  const sampleData = [
+export function generateSamplePhoneShopExcel(elements?: LabelElement[]): void {
+  const fullSampleRows: Record<string, string | number>[] = [
     {
       MaMay: 'IP15P-256-NT',
       Model: 'iPhone 15 Pro Max',
@@ -58,18 +81,10 @@ export function generateSamplePhoneShopExcel(): void {
       NhaManh: 'Chính Hãng VN/A',
       BaoHanh: '12 Tháng',
       MaKho: 'KHO-HANOI-01',
-    },
-    {
-      MaMay: 'IP15P-512-X',
-      Model: 'iPhone 15 Pro Max',
-      DungLuong: '512GB',
-      MauSac: 'Titan Xanh',
-      IMEI: '356782091234562',
-      Serial: 'F2LXK982P02',
-      Gia: 33490000,
-      NhaManh: 'Chính Hãng VN/A',
-      BaoHanh: '12 Tháng',
-      MaKho: 'KHO-HANOI-01',
+      TenShop: 'MOBILE CITY',
+      Website: 'mobilecity.vn',
+      STK: '190388888888',
+      NganHang: 'Techcombank',
     },
     {
       MaMay: 'SS-S24U-512-X',
@@ -82,6 +97,10 @@ export function generateSamplePhoneShopExcel(): void {
       NhaManh: 'SSVN',
       BaoHanh: '12 Tháng',
       MaKho: 'KHO-HCM-02',
+      TenShop: 'SAMSUNG STORE',
+      Website: 'samsung.com',
+      STK: '190399999999',
+      NganHang: 'Vietcombank',
     },
     {
       MaMay: 'IP14-128-D',
@@ -94,42 +113,58 @@ export function generateSamplePhoneShopExcel(): void {
       NhaManh: 'Chính Hãng VN/A',
       BaoHanh: '12 Tháng',
       MaKho: 'KHO-HANOI-01',
-    },
-    {
-      MaMay: 'PK-ANKER-65W',
-      Model: 'Củ Sạc Anker GaNPrime 65W',
-      DungLuong: '65W',
-      MauSac: 'Đen Matte',
-      IMEI: '8936000100231',
-      Serial: 'ANK65W00921',
-      Gia: 890000,
-      NhaManh: 'Phụ Kiện',
-      BaoHanh: '18 Tháng',
-      MaKho: 'KHO-PHUKIEN',
-    },
-    {
-      MaMay: 'PK-AIRPODS-P2',
-      Model: 'Tai Nghe Apple AirPods Pro 2',
-      DungLuong: 'USB-C',
-      MauSac: 'Trắng',
-      IMEI: '8936000100559',
-      Serial: 'H02KP910293',
-      Gia: 5690000,
-      NhaManh: 'Chính Hãng Apple',
-      BaoHanh: '12 Tháng',
-      MaKho: 'KHO-PHUKIEN',
+      TenShop: 'APPLE AUTHORIZED',
+      Website: 'apple.vn',
+      STK: '190377777777',
+      NganHang: 'MBBank',
     },
   ];
 
-  const worksheet = XLSX.utils.json_to_sheet(sampleData);
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, 'DanhSachTemDienThoai');
+  let keysToInclude: string[] = [];
+  if (elements && elements.length > 0) {
+    keysToInclude = extractVariablesFromElements(elements);
+  }
 
-  XLSX.writeFile(workbook, 'Mau_Danh_Sach_Tem_Dien_Thoai.xlsx');
+  let finalSampleData: Record<string, string | number>[] = [];
+
+  if (keysToInclude.length > 0) {
+    // Dynamically filter columns to match ONLY variables present in current template
+    finalSampleData = fullSampleRows.map((row) => {
+      const filteredRow: Record<string, string | number> = {};
+      keysToInclude.forEach((key) => {
+        filteredRow[key] = row[key] !== undefined ? row[key] : `Mẫu ${key}`;
+      });
+      return filteredRow;
+    });
+  } else {
+    // Default 10 standard columns
+    finalSampleData = fullSampleRows.map((row) => ({
+      MaMay: row.MaMay,
+      Model: row.Model,
+      DungLuong: row.DungLuong,
+      MauSac: row.MauSac,
+      IMEI: row.IMEI,
+      Serial: row.Serial,
+      Gia: row.Gia,
+      NhaManh: row.NhaManh,
+      BaoHanh: row.BaoHanh,
+      MaKho: row.MaKho,
+    }));
+  }
+
+  const worksheet = XLSX.utils.json_to_sheet(finalSampleData);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'DanhSachTem');
+
+  const fileName = keysToInclude.length === 2 && keysToInclude.includes('Model') && keysToInclude.includes('Serial')
+    ? 'Mau_Excel_2_Cot_Model_Serial.xlsx'
+    : 'Mau_Danh_Sach_Tem_Excel.xlsx';
+
+  XLSX.writeFile(workbook, fileName);
 }
 
 /**
- * Replaces Mustache variables e.g. {{Model}} or {{Gia | currency}} in text content.
+ * Replaces Mustache variables e.g. {{Model}} or {{Gia | currency}} in text content cleanly.
  */
 export function substituteVariables(templateText: string, dataRow: DatasetRow): string {
   if (!templateText) return '';
@@ -137,7 +172,14 @@ export function substituteVariables(templateText: string, dataRow: DatasetRow): 
   return templateText.replace(/\{\{\s*([a-zA-Z0-9_]+)(?:\s*\|\s*([a-zA-Z0-9_]+))?\s*\}\}/g, (_, key, filter) => {
     let value = dataRow[key];
     if (value === undefined || value === null) {
-      return `{{${key}}}`; // keep placeholder if not found
+      // Clean fallback for preview/display without raw {{...}}
+      if (key === 'Model') return 'iPhone 15 Pro Max';
+      if (key === 'Serial') return 'F2LXK982P01';
+      if (key === 'IMEI') return '356782091234561';
+      if (key === 'Gia') return filter === 'currency' ? '28.990.000 ₫' : '28990000';
+      if (key === 'MaMay') return 'IP15P-256';
+      if (key === 'TenShop') return 'MOBILE CITY';
+      return `[${key}]`;
     }
 
     // Apply formatting filters
@@ -161,3 +203,4 @@ export function substituteVariables(templateText: string, dataRow: DatasetRow): 
     return String(value);
   });
 }
+

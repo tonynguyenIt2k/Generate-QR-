@@ -53,9 +53,13 @@ export async function renderLabelToCanvas(
       ctx.strokeStyle = el.strokeColor || 'transparent';
       ctx.lineWidth = mmToPx(el.strokeWidth || 0.2);
 
-      if (el.cornerRadius) {
+      if (el.cornerRadius && typeof ctx.roundRect === 'function') {
         ctx.beginPath();
-        ctx.roundRect(x, y, w, h, mmToPx(el.cornerRadius));
+        try {
+          ctx.roundRect(x, y, w, h, mmToPx(el.cornerRadius));
+        } catch {
+          ctx.rect(x, y, w, h);
+        }
         if (el.fillColor && el.fillColor !== 'transparent') ctx.fill();
         if (el.strokeColor && el.strokeColor !== 'transparent' && el.strokeWidth > 0) ctx.stroke();
       } else {

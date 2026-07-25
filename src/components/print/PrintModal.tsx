@@ -119,15 +119,17 @@ export const PrintModal: React.FC<PrintModalProps> = ({
   };
 
   // Normalize labels: If generatedLabels is empty, create 1 preview item from sampleDataRow
-  const labelItems = useMemo(() => {
+  const labelItems = useMemo<GeneratedLabel[]>(() => {
     if (generatedLabels.length > 0) {
       return generatedLabels;
     }
     return [
       {
         id: 'sample-0',
+        rowIndex: 0,
         data: sampleDataRow,
         selected: true,
+        status: 'rendered',
       },
     ];
   }, [generatedLabels, sampleDataRow]);
@@ -175,8 +177,8 @@ export const PrintModal: React.FC<PrintModalProps> = ({
       for (let i = 0; i < limit; i++) {
         const item = activeLabels[i];
         if (!item) continue;
-        if (item.previewUrl) {
-          newCache[item.id] = item.previewUrl;
+        if (item.previewDataUrl) {
+          newCache[item.id] = item.previewDataUrl;
         } else {
           try {
             const canvas = await renderLabelToCanvas(template, item.data, 150);

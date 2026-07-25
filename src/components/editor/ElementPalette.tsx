@@ -168,10 +168,10 @@ export const ElementPalette: React.FC<ElementPaletteProps> = ({
                 }
                 onClick={() => handleAddText(`{{${v}}}`, 8, 'normal', '#0f172a')}
                 className="group flex items-center gap-1 px-2 py-1 rounded-md bg-slate-100 dark:bg-slate-800 hover:bg-blue-50 dark:hover:bg-blue-900/40 border border-slate-200 dark:border-slate-700 hover:border-blue-400 text-[11px] font-mono text-slate-700 dark:text-slate-200 cursor-grab active:cursor-grabbing transition-all"
-                title={`Kéo vứt vào khung tem hoặc click để thêm {{${v}}}`}
+                title={`Kéo vứt vào khung tem hoặc click để thêm [${v}]`}
               >
                 <Tag className="w-3 h-3 text-blue-500 group-hover:scale-110 transition-transform" />
-                <span>{`{{${v}}}`}</span>
+                <span>{`[${v}]`}</span>
               </button>
             ))}
           </div>
@@ -306,7 +306,7 @@ export const ElementPalette: React.FC<ElementPaletteProps> = ({
               className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-blue-500 dark:hover:border-blue-500 text-xs text-slate-700 dark:text-slate-200 transition-all cursor-grab active:cursor-grabbing"
             >
               <Smartphone className="w-3.5 h-3.5 text-blue-500 shrink-0" />
-              <span className="truncate">Tên Máy {'{{Model}}'}</span>
+              <span className="truncate">Tên Máy [Model]</span>
             </button>
             <button
               draggable={true}
@@ -327,7 +327,7 @@ export const ElementPalette: React.FC<ElementPaletteProps> = ({
               className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-blue-500 dark:hover:border-blue-500 text-xs text-slate-700 dark:text-slate-200 transition-all cursor-grab active:cursor-grabbing"
             >
               <DollarSign className="w-3.5 h-3.5 text-red-500 shrink-0" />
-              <span className="truncate">Giá Bán {'{{Gia}}'}</span>
+              <span className="truncate">Giá Bán [Gia]</span>
             </button>
             <button
               draggable={true}
@@ -348,7 +348,7 @@ export const ElementPalette: React.FC<ElementPaletteProps> = ({
               className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-blue-500 dark:hover:border-blue-500 text-xs text-slate-700 dark:text-slate-200 transition-all cursor-grab active:cursor-grabbing"
             >
               <Tag className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-              <span className="truncate">Mã IMEI {'{{IMEI}}'}</span>
+              <span className="truncate">Mã IMEI [IMEI]</span>
             </button>
             <button
               draggable={true}

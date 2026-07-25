@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Printer,
   Download,
@@ -9,9 +9,13 @@ import {
   Plus,
   QrCode,
   Save,
-  RotateCcw,
   Zap,
+  User as UserIcon,
+  LogOut,
+  LogIn,
+  Check,
 } from 'lucide-react';
+import { User } from 'firebase/auth';
 import { LabelTemplate } from '../../types/label';
 
 interface HeaderProps {
@@ -25,6 +29,9 @@ interface HeaderProps {
   onSaveTemplate: () => void;
   onNewTemplate: () => void;
   datasetCount: number;
+  authUser: User | null;
+  onOpenAuthModal: () => void;
+  onLogout: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -38,7 +45,12 @@ export const Header: React.FC<HeaderProps> = ({
   onSaveTemplate,
   onNewTemplate,
   datasetCount,
+  authUser,
+  onOpenAuthModal,
+  onLogout,
 }) => {
+  const [showUserMenu, setShowUserMenu] = useState(false);
+
   return (
     <header className="h-14 sm:h-16 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-2 sm:px-4 flex items-center justify-between shadow-xs z-20 shrink-0 gap-2">
       {/* Brand & Active Template */}
@@ -56,7 +68,7 @@ export const Header: React.FC<HeaderProps> = ({
             </span>
           </div>
           <div className="flex items-center gap-1.5 text-[10px] sm:text-xs text-slate-500 dark:text-slate-400 truncate">
-            <span className="font-medium text-slate-700 dark:text-slate-300 truncate max-w-[160px] sm:max-w-[240px] md:max-w-none">
+            <span className="font-medium text-slate-700 dark:text-slate-300 truncate max-w-[140px] sm:max-w-[200px] md:max-w-none">
               {currentTemplate.name}
             </span>
             <span className="hidden sm:inline">•</span>
@@ -67,9 +79,9 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
       </div>
 
-      {/* Main Actions - Horizontal Scrollable on Mobile */}
+      {/* Main Actions */}
       <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar py-1">
-        {/* Quick Direct Print Button (Always prominent) */}
+        {/* Direct Print Button */}
         <button
           onClick={() => onOpenPrintModal(true)}
           className="flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3.5 py-1.5 text-xs font-bold text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-md shadow-blue-500/25 rounded-lg transition-all cursor-pointer ring-2 ring-blue-500/30 active:scale-95 shrink-0 whitespace-nowrap"
@@ -97,20 +109,30 @@ export const Header: React.FC<HeaderProps> = ({
         <button
           onClick={onOpenTemplates}
           className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-200 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-lg transition-colors cursor-pointer shrink-0 whitespace-nowrap"
-          title="Mẫu Tem"
+          title="Thư viện mẫu tem"
         >
           <LayoutTemplate className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-500 dark:text-slate-400 shrink-0" />
           <span className="hidden md:inline whitespace-nowrap">Mẫu Tem</span>
         </button>
 
-        {/* Save Template */}
+        {/* Create New Template */}
+        <button
+          onClick={onNewTemplate}
+          className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1.5 text-xs font-medium text-indigo-700 dark:text-indigo-300 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/50 dark:hover:bg-indigo-900/50 border border-indigo-200 dark:border-indigo-800/60 rounded-lg transition-colors cursor-pointer shrink-0 whitespace-nowrap"
+          title="Tạo mẫu tem mới từ đầu"
+        >
+          <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
+          <span className="hidden lg:inline whitespace-nowrap">Mẫu Mới</span>
+        </button>
+
+        {/* Save / Overwrite Template */}
         <button
           onClick={onSaveTemplate}
-          className="hidden sm:flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-200 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-lg transition-colors cursor-pointer shrink-0 whitespace-nowrap"
-          title="Lưu mẫu tem"
+          className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-200 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-lg transition-colors cursor-pointer shrink-0 whitespace-nowrap"
+          title="Lưu đè mẫu tem hiện tại"
         >
           <Save className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-500 dark:text-slate-400 shrink-0" />
-          <span className="hidden xl:inline whitespace-nowrap">Lưu Mẫu</span>
+          <span className="hidden xl:inline whitespace-nowrap">Lưu Đè Mẫu</span>
         </button>
 
         {/* Export File */}
@@ -135,13 +157,67 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Dark mode toggle */}
         <button
+          type="button"
           onClick={() => setDarkMode(!darkMode)}
-          className="p-1.5 sm:p-2 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 bg-slate-100 dark:bg-slate-800 rounded-lg transition-colors cursor-pointer shrink-0"
-          title="Chuyển chế độ Sáng / Tối"
+          className="p-1.5 sm:p-2 text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-lg transition-all cursor-pointer shrink-0 shadow-xs flex items-center justify-center"
+          title={darkMode ? 'Chuyển sang giao diện Sáng' : 'Chuyển sang giao diện Tối'}
         >
-          {darkMode ? <Sun className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> : <Moon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
+          {darkMode ? (
+            <Sun className="w-4 h-4 text-amber-400 fill-amber-400/20" />
+          ) : (
+            <Moon className="w-4 h-4 text-indigo-600 dark:text-indigo-400 fill-indigo-500/10" />
+          )}
         </button>
+
+        {/* User Auth Profile Button */}
+        <div className="relative shrink-0 ml-1">
+          {authUser && !authUser.isAnonymous ? (
+            <button
+              onClick={() => setShowUserMenu(!showUserMenu)}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800/80 rounded-lg text-indigo-700 dark:text-indigo-300 text-xs font-bold cursor-pointer transition-all hover:bg-indigo-100"
+            >
+              <div className="w-5 h-5 rounded-full bg-indigo-600 text-white flex items-center justify-center text-[10px] font-black uppercase">
+                {authUser.email ? authUser.email.charAt(0) : 'U'}
+              </div>
+              <span className="hidden sm:inline truncate max-w-[110px]">
+                {authUser.email ? authUser.email.split('@')[0] : 'Tài Khoản'}
+              </span>
+            </button>
+          ) : (
+            <button
+              onClick={onOpenAuthModal}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-900 text-white dark:bg-slate-700 dark:hover:bg-slate-600 text-xs font-bold rounded-lg transition-all cursor-pointer shadow-xs"
+            >
+              <LogIn className="w-3.5 h-3.5" />
+              <span className="whitespace-nowrap">Đăng Nhập</span>
+            </button>
+          )}
+
+          {/* User Profile Dropdown */}
+          {showUserMenu && authUser && !authUser.isAnonymous && (
+            <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-xl z-50 p-3 animate-fade-in text-xs">
+              <div className="pb-2 border-b border-slate-100 dark:border-slate-700 mb-2">
+                <p className="text-[11px] text-slate-400 font-medium">Đã đăng nhập với</p>
+                <p className="font-bold text-slate-800 dark:text-slate-100 truncate">{authUser.email}</p>
+                <span className="inline-block mt-1 px-2 py-0.5 bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 font-semibold text-[10px] rounded-md">
+                  Đồng bộ riêng theo tài khoản
+                </span>
+              </div>
+              <button
+                onClick={() => {
+                  setShowUserMenu(false);
+                  onLogout();
+                }}
+                className="w-full flex items-center gap-2 px-2.5 py-2 hover:bg-red-50 dark:hover:bg-red-950/40 text-red-600 rounded-xl font-bold cursor-pointer transition-colors"
+              >
+                <LogOut className="w-4 h-4" />
+                <span>Đăng Xuất</span>
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     </header>
   );
 };
+

@@ -67,7 +67,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
   onLayerMove,
 }) => {
   return (
-    <div className="h-11 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-3 flex items-center justify-between overflow-x-auto select-none gap-2 shrink-0">
+    <div className="h-11 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-3 flex items-center justify-between overflow-x-auto no-scrollbar select-none gap-2 shrink-0">
       {/* Left: History & Zoom */}
       <div className="flex items-center gap-1 shrink-0">
         <button
