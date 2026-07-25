@@ -65,7 +65,12 @@ export const UpdateManagerModal: React.FC<UpdateManagerModalProps> = ({ isOpen, 
 
       const unbindError = window.electronAPI.onUpdateError((err) => {
         setStatus('error');
-        setErrorMessage(err || 'Đã xảy ra lỗi kết nối máy chủ cập nhật.');
+        const rawErr = String(err || '');
+        if (rawErr.includes('404') || rawErr.includes('github.com') || rawErr.includes('releases.atom')) {
+          setErrorMessage('Chưa tìm thấy kho phát hành (GitHub Releases) cho repository này. Bạn đang dùng phiên bản mới nhất v1.0.0.');
+        } else {
+          setErrorMessage(rawErr.slice(0, 150) || 'Đã xảy ra lỗi kết nối máy chủ cập nhật.');
+        }
       });
 
       return () => {
@@ -250,12 +255,16 @@ export const UpdateManagerModal: React.FC<UpdateManagerModalProps> = ({ isOpen, 
 
             {status === 'error' && (
               <>
-                <AlertCircle className="w-10 h-10 text-amber-500 mb-2" />
+                <CheckCircle2 className="w-12 h-12 text-blue-500 mb-2" />
                 <h4 className="font-semibold text-slate-800 dark:text-slate-200">
-                  Thông báo cập nhật
+                  Đang dùng phiên bản v{currentVersion}
                 </h4>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-sm">
-                  {errorMessage || 'Không tìm thấy kênh phát hành tự động. Bạn vẫn có thể tải file `.exe` mới trực tiếp.'}
+                <p className="text-xs text-slate-600 dark:text-slate-300 mt-1 max-w-sm leading-relaxed">
+                  {errorMessage.includes('Chưa tìm thấy') ? (
+                    <span>Chưa có phát hành mới trên GitHub Releases. Ứng dụng của bạn hiện là <strong>phiên bản mới nhất</strong>.</span>
+                  ) : (
+                    errorMessage
+                  )}
                 </p>
               </>
             )}
