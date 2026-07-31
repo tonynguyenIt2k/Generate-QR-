@@ -18,6 +18,7 @@ import {
   Sliders,
   Save,
   Zap,
+  ExternalLink,
 } from 'lucide-react';
 import { GeneratedLabel, LabelTemplate, PrintSettings } from '../../types/label';
 import { exportBatchPdf, renderLabelToCanvas } from '../../utils/pdfExporter';
@@ -216,63 +217,104 @@ export const PrintModal: React.FC<PrintModalProps> = ({
     }
   };
 
-  const handleDirectBrowserPrint = async () => {
+  const printWithHiddenIframe = (htmlContent: string): Promise<void> => {
+    return new Promise((resolve) => {
+      let iframe = document.getElementById('printable-thermal-iframe') as HTMLIFrameElement | null;
+      if (!iframe) {
+        iframe = document.createElement('iframe');
+        iframe.id = 'printable-thermal-iframe';
+        iframe.style.position = 'fixed';
+        iframe.style.right = '0';
+        iframe.style.bottom = '0';
+        iframe.style.width = '0px';
+        iframe.style.height = '0px';
+        iframe.style.border = '0';
+        iframe.style.opacity = '0';
+        iframe.style.pointerEvents = 'none';
+        iframe.style.zIndex = '-9999';
+        document.body.appendChild(iframe);
+      }
+
+      const doc = iframe.contentWindow?.document || iframe.contentDocument;
+      if (doc) {
+        doc.open();
+        doc.write(htmlContent);
+        doc.close();
+
+        setTimeout(() => {
+          try {
+            iframe?.contentWindow?.focus();
+            iframe?.contentWindow?.print();
+          } catch (e) {
+            console.error('Lỗi khi kích hoạt lệnh in từ iframe:', e);
+          }
+          resolve();
+        }, 500);
+      } else {
+        resolve();
+      }
+    });
+  };
+
+  const handleDirectBrowserPrint = async (openNewTab: boolean = false) => {
     if (activeLabels.length === 0) {
       showToast('Cảnh báo', 'Không có tem nào được chọn để in!', 'warning');
       return;
     }
 
-    // Synchronously open window inside click event gesture to prevent browser popup block
-    const printWin = window.open('about:blank', '_blank');
-    if (printWin) {
-      try {
-        printWin.document.write(`
-          <!DOCTYPE html>
-          <html>
-            <head>
-              <meta charset="utf-8" />
-              <title>Đang tạo trang in - ${template.name}</title>
-              <style>
-                body {
-                  font-family: system-ui, -apple-system, sans-serif;
-                  display: flex;
-                  flex-direction: column;
-                  align-items: center;
-                  justify-content: center;
-                  height: 100vh;
-                  margin: 0;
-                  background: #0f172a;
-                  color: #f8fafc;
-                }
-                .spinner {
-                  width: 44px;
-                  height: 44px;
-                  border: 4px solid #334155;
-                  border-top-color: #3b82f6;
-                  border-radius: 50%;
-                  animation: spin 0.8s linear infinite;
-                  margin-bottom: 16px;
-                }
-                @keyframes spin { to { transform: rotate(360deg); } }
-                .title { font-size: 16px; font-weight: 600; margin-bottom: 6px; }
-                .subtitle { font-size: 13px; color: #94a3b8; }
-              </style>
-            </head>
-            <body>
-              <div class="spinner"></div>
-              <div class="title">Đang xử lý bản in cho máy in nhiệt...</div>
-              <div class="subtitle">Cửa sổ in của hệ thống sẽ tự động bật lên ngay sau đây.</div>
-            </body>
-          </html>
-        `);
-        printWin.document.close();
-      } catch (e) {
-        console.error(e);
+    let printWin: Window | null = null;
+    if (openNewTab) {
+      printWin = window.open('about:blank', '_blank');
+      if (printWin) {
+        try {
+          printWin.document.write(`
+            <!DOCTYPE html>
+            <html>
+              <head>
+                <meta charset="utf-8" />
+                <title>Đang chuẩn bị trang in - ${template.name}</title>
+                <style>
+                  body {
+                    font-family: system-ui, -apple-system, sans-serif;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    justify-content: center;
+                    height: 100vh;
+                    margin: 0;
+                    background: #0f172a;
+                    color: #f8fafc;
+                  }
+                  .spinner {
+                    width: 44px;
+                    height: 44px;
+                    border: 4px solid #334155;
+                    border-top-color: #3b82f6;
+                    border-radius: 50%;
+                    animation: spin 0.8s linear infinite;
+                    margin-bottom: 16px;
+                  }
+                  @keyframes spin { to { transform: rotate(360deg); } }
+                  .title { font-size: 16px; font-weight: 600; margin-bottom: 6px; }
+                  .subtitle { font-size: 13px; color: #94a3b8; }
+                </style>
+              </head>
+              <body>
+                <div class="spinner"></div>
+                <div class="title">Đang xử lý bản in cho máy in nhiệt...</div>
+                <div class="subtitle">Cửa sổ in của hệ thống sẽ tự động bật lên ngay sau đây.</div>
+              </body>
+            </html>
+          `);
+          printWin.document.close();
+        } catch (e) {
+          console.error(e);
+        }
       }
     }
 
     setIsPrintingDirect(true);
-    showToast('Đang tạo bản in...', 'Hệ thống đang chuẩn bị dữ liệu máy in nhiệt...', 'info');
+    showToast('Đang tạo bản in...', 'Hệ thống đang xử lý dữ liệu cho máy in nhiệt...', 'info');
 
     try {
       const images: string[] = [];
@@ -458,40 +500,15 @@ export const PrintModal: React.FC<PrintModalProps> = ({
         </html>
       `;
 
-      const blob = new Blob([fullHtml], { type: 'text/html;charset=utf-8' });
-      const blobUrl = URL.createObjectURL(blob);
-
-      if (printWin && !printWin.closed) {
+      if (openNewTab && printWin && !printWin.closed) {
+        const blob = new Blob([fullHtml], { type: 'text/html;charset=utf-8' });
+        const blobUrl = URL.createObjectURL(blob);
         printWin.location.href = blobUrl;
         showToast('Thành công', 'Đã mở trang in ở tab mới! Cửa sổ in hệ thống đang bật lên.', 'success');
       } else {
-        // Fallback: append iframe or local area + PDF download
-        let printArea = document.getElementById('printable-thermal-area');
-        if (printArea) printArea.remove();
-
-        printArea = document.createElement('div');
-        printArea.id = 'printable-thermal-area';
-        printArea.innerHTML = `
-          <style id="thermal-print-style">
-            @media print {
-              @page { size: ${totalRowW}mm ${labelH}mm; margin: 0mm !important; }
-              html, body { margin: 0 !important; padding: 0 !important; background: #fff !important; }
-              body > *:not(#printable-thermal-area) { display: none !important; }
-              #printable-thermal-area { display: block !important; position: absolute; top:0; left:0; width: ${totalRowW}mm; }
-              .thermal-print-row { width: ${totalRowW}mm; height: ${labelH}mm; page-break-after: always; display: flex; gap: ${gap}mm; }
-              .thermal-print-img { width: ${labelW}mm; height: ${labelH}mm; object-fit: contain; }
-            }
-            @media screen { #printable-thermal-area { display: none !important; } }
-          </style>
-          <div>
-            ${rows.map((r) => `<div class="thermal-print-row">${r.map((src) => `<img src="${src}" class="thermal-print-img" />`).join('')}</div>`).join('')}
-          </div>
-        `;
-        document.body.appendChild(printArea);
-
-        const pdf = await exportBatchPdf(template, activeLabels, printSettings);
-        pdf.save(`TemInNhiet_${template.name.replace(/\s+/g, '_')}.pdf`);
-        showToast('Trình duyệt chặn Popup', 'Hệ thống đã tự động xuất PDF in nhiệt cho bạn!', 'warning');
+        // Direct print via hidden iframe (No Popup Blocker Issue!)
+        await printWithHiddenIframe(fullHtml);
+        showToast('Thành công', 'Đã mở hộp thoại in trực tiếp trên trang!', 'success');
       }
     } catch (err) {
       console.error('Lỗi khi in trực tiếp:', err);
@@ -505,7 +522,7 @@ export const PrintModal: React.FC<PrintModalProps> = ({
   useEffect(() => {
     if (isOpen && autoPrintTrigger) {
       const timer = setTimeout(() => {
-        handleDirectBrowserPrint();
+        handleDirectBrowserPrint(false);
       }, 350);
       return () => clearTimeout(timer);
     }
@@ -711,7 +728,7 @@ export const PrintModal: React.FC<PrintModalProps> = ({
               </button>
 
               <button
-                onClick={handleDirectBrowserPrint}
+                onClick={() => handleDirectBrowserPrint(false)}
                 disabled={isPrintingDirect || printableList.length === 0}
                 className="w-full py-3 px-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 disabled:opacity-50 text-white font-bold rounded-xl shadow-lg shadow-blue-500/30 transition-all flex items-center justify-center gap-2 cursor-pointer text-xs ring-2 ring-blue-400/40 active:scale-95"
               >
@@ -981,6 +998,16 @@ export const PrintModal: React.FC<PrintModalProps> = ({
 
           <div className="flex items-center gap-2 sm:gap-3 overflow-x-auto no-scrollbar shrink-0">
             <button
+              onClick={() => handleDirectBrowserPrint(true)}
+              disabled={isPrintingDirect || printableList.length === 0}
+              className="flex items-center gap-1.5 px-3 py-2 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 disabled:opacity-50 text-slate-800 dark:text-slate-100 font-semibold rounded-xl transition-all cursor-pointer text-xs whitespace-nowrap shrink-0"
+              title="Mở bản in ở tab mới (nếu muốn xem dạng trang web riêng)"
+            >
+              <ExternalLink className="w-3.5 h-3.5 shrink-0" />
+              <span>Mở Tab In</span>
+            </button>
+
+            <button
               onClick={handleDownloadPdf}
               disabled={exportingPdf || printableList.length === 0}
               className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold rounded-xl shadow-md shadow-emerald-500/20 transition-all cursor-pointer text-xs whitespace-nowrap shrink-0"
@@ -990,7 +1017,7 @@ export const PrintModal: React.FC<PrintModalProps> = ({
             </button>
 
             <button
-              onClick={handleDirectBrowserPrint}
+              onClick={() => handleDirectBrowserPrint(false)}
               disabled={isPrintingDirect || printableList.length === 0}
               className="flex items-center gap-1.5 sm:gap-2 px-3.5 sm:px-5 py-2 sm:py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 disabled:opacity-50 text-white font-bold rounded-xl shadow-lg shadow-blue-500/25 transition-all cursor-pointer text-xs ring-2 ring-blue-400/40 active:scale-95 whitespace-nowrap shrink-0"
             >
