@@ -80,9 +80,14 @@ export const DatasetView: React.FC<DatasetViewProps> = ({
 
   // Save Dataset
   const handleSaveDataset = () => {
+    try {
+      localStorage.setItem('qr_label_pro_dataset', JSON.stringify(dataset));
+    } catch (e) {
+      console.error('Failed to save dataset to localStorage', e);
+    }
     showToast(
       'Đã lưu dữ liệu Excel thành công!',
-      `Đã đồng bộ lưu ${dataset.length} sản phẩm và ${columnOrder.length} cột dữ liệu lên Cloud Firebase.`,
+      `Đã lưu vĩnh viễn ${dataset.length} sản phẩm và ${columnOrder.length} cột dữ liệu vào thiết bị & đồng bộ Cloud!`,
       'success'
     );
   };
@@ -551,16 +556,21 @@ export const DatasetView: React.FC<DatasetViewProps> = ({
                     </td>
 
                     {/* Visible Column Cells */}
-                    {activeColumns.map((header) => (
-                      <td key={header} className="p-1.5 border-r border-slate-200 dark:border-slate-800">
-                        <input
-                          type="text"
-                          value={String(row[header] ?? '')}
-                          onChange={(e) => handleCellChange(rowIndex, header, e.target.value)}
-                          className="w-full px-2 py-1 rounded bg-transparent focus:bg-white dark:focus:bg-slate-800 border border-transparent focus:border-blue-500 text-xs font-mono"
-                        />
-                      </td>
-                    ))}
+                    {activeColumns.map((header) => {
+                      const cellVal = String(row[header] ?? '');
+                      const hasMultiline = cellVal.includes('\n');
+                      return (
+                        <td key={header} className="p-1 border-r border-slate-200 dark:border-slate-800 vertical-top">
+                          <textarea
+                            rows={hasMultiline ? Math.min(4, cellVal.split('\n').length) : 1}
+                            value={cellVal}
+                            onChange={(e) => handleCellChange(rowIndex, header, e.target.value)}
+                            className="w-full px-2 py-1 rounded bg-transparent focus:bg-white dark:focus:bg-slate-800 border border-transparent focus:border-blue-500 text-xs font-mono resize-y leading-snug min-h-[28px]"
+                            placeholder="..."
+                          />
+                        </td>
+                      );
+                    })}
 
                     <td className="p-3 text-center">
                       <button

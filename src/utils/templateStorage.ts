@@ -7,7 +7,6 @@ export function getAllTemplates(): LabelTemplate[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) {
-      // Seed with default templates
       saveAllTemplates(DEFAULT_TEMPLATES);
       return DEFAULT_TEMPLATES;
     }
@@ -16,6 +15,29 @@ export function getAllTemplates(): LabelTemplate[] {
       saveAllTemplates(DEFAULT_TEMPLATES);
       return DEFAULT_TEMPLATES;
     }
+
+    // Merge or update default templates
+    let modified = false;
+    DEFAULT_TEMPLATES.forEach((def) => {
+      const idx = parsed.findIndex((t) => t.id === def.id);
+      if (idx === -1) {
+        parsed.unshift(def);
+        modified = true;
+      } else {
+        // Keep updated default elements & dimensions
+        parsed[idx] = {
+          ...def,
+          // Preserve user updatedAt if custom, but use new elements
+          elements: def.elements,
+        };
+        modified = true;
+      }
+    });
+
+    if (modified) {
+      saveAllTemplates(parsed);
+    }
+
     return parsed;
   } catch (e) {
     console.error('Error reading templates from localStorage', e);

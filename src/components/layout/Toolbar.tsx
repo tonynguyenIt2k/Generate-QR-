@@ -91,26 +91,46 @@ export const Toolbar: React.FC<ToolbarProps> = ({
 
         {/* Zoom controls */}
         <button
-          onClick={() => setZoom((z) => Math.max(0.5, z - 0.25))}
+          onClick={() => setZoom((z) => Math.max(0.5, Math.round((z - 0.25) * 100) / 100))}
           className="p-1.5 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded transition-colors cursor-pointer"
           title="Thu Nhỏ"
         >
           <ZoomOut className="w-4 h-4" />
         </button>
-        <span className="text-xs font-mono font-medium text-slate-700 dark:text-slate-300 min-w-10 text-center">
-          {Math.round(zoom * 100)}%
-        </span>
+
+        {(() => {
+          const currentPct = Math.round(zoom * 100);
+          const defaultOptions = [100, 150, 200, 250, 300, 350, 400, 450, 500, 600];
+          const options = defaultOptions.includes(currentPct)
+            ? defaultOptions
+            : [...defaultOptions, currentPct].sort((a, b) => a - b);
+          return (
+            <select
+              value={currentPct}
+              onChange={(e) => setZoom(() => Number(e.target.value) / 100)}
+              className="text-xs font-mono font-medium text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded px-1.5 py-0.5 cursor-pointer outline-none hover:border-blue-500"
+              title="Tỉ lệ phóng to/thu nhỏ"
+            >
+              {options.map((opt) => (
+                <option key={opt} value={opt}>
+                  {opt}%
+                </option>
+              ))}
+            </select>
+          );
+        })()}
+
         <button
-          onClick={() => setZoom((z) => Math.min(4, z + 0.25))}
+          onClick={() => setZoom((z) => Math.min(5, Math.round((z + 0.25) * 100) / 100))}
           className="p-1.5 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded transition-colors cursor-pointer"
           title="Phóng To"
         >
           <ZoomIn className="w-4 h-4" />
         </button>
         <button
-          onClick={() => setZoom(() => 1.5)}
+          onClick={() => setZoom(() => 2.5)}
           className="p-1.5 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded transition-colors cursor-pointer"
-          title="Khôi phục zoom (150%)"
+          title="Đặt lại zoom mặc định (250%)"
         >
           <Maximize2 className="w-3.5 h-3.5" />
         </button>

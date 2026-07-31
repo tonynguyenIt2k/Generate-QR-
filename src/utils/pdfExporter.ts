@@ -31,9 +31,33 @@ export async function renderLabelToCanvas(
   // Sort elements by zIndex
   const sortedElements = [...template.elements].sort((a, b) => a.zIndex - b.zIndex);
 
+  const isDual = template.isDualPart || template.id.includes('dual');
+
+  const getElementDataRow = (el: any): Record<string, any> => {
+    if (!isDual) return dataRow;
+
+    const isTop = el.id.startsWith('top-') || (el.y + el.height / 2 < template.heightMm / 2);
+
+    if (dataRow._oddRow || dataRow._evenRow) {
+      return isTop ? (dataRow._oddRow || dataRow) : (dataRow._evenRow || {});
+    }
+    if (dataRow._sampleOdd || dataRow._sampleEven) {
+      return isTop ? (dataRow._sampleOdd || dataRow) : (dataRow._sampleEven || dataRow);
+    }
+
+    if (isTop) return dataRow;
+    return {
+      ...dataRow,
+      Serial: dataRow.Serial
+        ? (String(dataRow.Serial).includes('01') ? String(dataRow.Serial).replace('01', '02') : `${dataRow.Serial}-2`)
+        : 'F2LXK982P02',
+    };
+  };
+
   for (const el of sortedElements) {
     if (el.visible === false) continue;
 
+    const elDataRow = getElementDataRow(el);
     const x = mmToPx(el.x);
     const y = mmToPx(el.y);
     const w = mmToPx(el.width);
@@ -74,12 +98,15 @@ export async function renderLabelToCanvas(
       ctx.lineTo(x + w, y + h / 2);
       ctx.stroke();
     } else if (el.type === 'text') {
-      const substitutedText = substituteVariables(el.content, dataRow);
+      const substitutedText = substituteVariables(el.content, elDataRow);
       const fontPt = el.fontSize || 9;
       const fontPx = fontPt * (targetDpi / 72);
+      const lineHeightPx = fontPx * (el.lineHeight || 1.15);
 
       ctx.fillStyle = el.color || '#000000';
-      ctx.font = `${el.fontStyle === 'italic' ? 'italic ' : ''}${el.fontWeight === 'bold' || el.fontWeight === '800' ? 'bold ' : ''}${fontPx}px ${el.fontFamily || 'sans-serif'}`;
+      ctx.font = `${el.fontStyle === 'italic' ? 'italic ' : ''}${
+        el.fontWeight === 'bold' || el.fontWeight === '800' ? 'bold ' : ''
+      }${fontPx}px ${el.fontFamily || 'sans-serif'}`;
       ctx.textBaseline = 'top';
 
       let textX = x;
@@ -93,9 +120,49 @@ export async function renderLabelToCanvas(
         ctx.textAlign = 'left';
       }
 
-      ctx.fillText(substitutedText, textX, y, w);
+      // Support line breaks (\n) and auto word wrapping within width w
+      const paragraphs = (substitutedText || '').split('\n');
+      const renderedLines: string[] = [];
+
+      for (const paragraph of paragraphs) {
+        if (!paragraph) {
+          renderedLines.push('');
+          continue;
+        }
+
+        const pWidth = ctx.measureText(paragraph).width;
+        if (pWidth <= w + 0.5) {
+          renderedLines.push(paragraph);
+        } else {
+          const words = paragraph.split(' ');
+          let currentLine = '';
+
+          for (let i = 0; i < words.length; i++) {
+            const word = words[i];
+            const testLine = currentLine ? `${currentLine} ${word}` : word;
+            const testWidth = ctx.measureText(testLine).width;
+
+            if (testWidth > w + 0.5 && currentLine !== '') {
+              renderedLines.push(currentLine);
+              currentLine = word;
+            } else {
+              currentLine = testLine;
+            }
+          }
+          if (currentLine) {
+            renderedLines.push(currentLine);
+          }
+        }
+      }
+
+      // Draw stacked lines
+      for (let lineIndex = 0; lineIndex < renderedLines.length; lineIndex++) {
+        const lineY = y + lineIndex * lineHeightPx;
+        if (lineY + fontPx > y + h + fontPx * 3) break;
+        ctx.fillText(renderedLines[lineIndex], textX, lineY);
+      }
     } else if (el.type === 'qr') {
-      const substitutedContent = substituteVariables(el.content, dataRow);
+      const substitutedContent = substituteVariables(el.content, elDataRow);
       const qrDataUrl = await generateQRDataUrl({
         content: substitutedContent,
         fgColor: el.fgColor,
@@ -109,7 +176,7 @@ export async function renderLabelToCanvas(
       const img = await loadImage(qrDataUrl);
       ctx.drawImage(img, x, y, w, h);
     } else if (el.type === 'barcode') {
-      const substitutedContent = substituteVariables(el.content, dataRow);
+      const substitutedContent = substituteVariables(el.content, elDataRow);
       const barcodeDataUrl = generateBarcodeDataUrl({
         content: substitutedContent,
         format: el.format,

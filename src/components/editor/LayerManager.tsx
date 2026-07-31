@@ -13,6 +13,8 @@ import {
   Type,
   Square,
   Image as ImageIcon,
+  PanelRightClose,
+  Group,
 } from 'lucide-react';
 
 interface LayerManagerProps {
@@ -20,6 +22,9 @@ interface LayerManagerProps {
   selectedElementId: string | null;
   onSelectElement: (id: string) => void;
   onUpdateElements: (elements: LabelElement[]) => void;
+  onToggleCollapse?: () => void;
+  onWidthChange?: (newWidth: number) => void;
+  currentWidth?: number;
 }
 
 export const LayerManager: React.FC<LayerManagerProps> = ({
@@ -27,6 +32,9 @@ export const LayerManager: React.FC<LayerManagerProps> = ({
   selectedElementId,
   onSelectElement,
   onUpdateElements,
+  onToggleCollapse,
+  onWidthChange,
+  currentWidth,
 }) => {
   const sorted = [...elements].sort((a, b) => b.zIndex - a.zIndex); // top layer first
 
@@ -81,12 +89,24 @@ export const LayerManager: React.FC<LayerManagerProps> = ({
   };
 
   return (
-    <div className="w-full lg:w-56 bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 p-3 select-none text-xs flex flex-col shrink-0">
-      <div className="flex items-center justify-between mb-2">
+    <div className="w-full h-full bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 p-3 select-none text-xs flex flex-col shrink-0">
+      <div className="flex items-center justify-between mb-2 pb-1.5 border-b border-slate-200 dark:border-slate-800">
         <span className="font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wider text-[10px] flex items-center gap-1.5">
           <Layers className="w-3.5 h-3.5 text-slate-500" />
-          Danh Sách Layer ({elements.length})
+          <span>Danh Sách Layer ({elements.length})</span>
         </span>
+        <div className="flex items-center gap-1">
+          {onToggleCollapse && (
+            <button
+              type="button"
+              onClick={onToggleCollapse}
+              className="p-1 hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-500 rounded cursor-pointer transition-colors"
+              title="Thu gọn danh sách lớp"
+            >
+              <PanelRightClose className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto space-y-1 pr-0.5">
@@ -105,6 +125,12 @@ export const LayerManager: React.FC<LayerManagerProps> = ({
               <div className="flex items-center gap-2 truncate pr-1">
                 {getElementIcon(el.type)}
                 <span className="truncate text-[11px]">{el.name || el.type}</span>
+                {el.groupId && (
+                  <span className="shrink-0 px-1 py-0.2 bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 rounded text-[9px] font-mono flex items-center gap-0.5" title="Thuộc nhóm">
+                    <Group className="w-2.5 h-2.5" />
+                    <span>Group</span>
+                  </span>
+                )}
               </div>
 
               <div className="flex items-center gap-1">

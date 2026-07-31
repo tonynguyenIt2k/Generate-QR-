@@ -11,17 +11,24 @@ import {
   Tag,
   DollarSign,
   Plus,
+  PanelLeftClose,
 } from 'lucide-react';
 import { ElementType, LabelElement } from '../../types/label';
 
 interface ElementPaletteProps {
   onAddElement: (element: Partial<LabelElement>) => void;
   sampleVariables?: string[];
+  onToggleCollapse?: () => void;
+  onWidthChange?: (newWidth: number) => void;
+  currentWidth?: number;
 }
 
 export const ElementPalette: React.FC<ElementPaletteProps> = ({
   onAddElement,
   sampleVariables = ['Model', 'IMEI', 'Gia', 'Serial', 'DungLuong', 'MauSac'],
+  onToggleCollapse,
+  onWidthChange,
+  currentWidth,
 }) => {
   const handleDragStart = (e: React.DragEvent, elementData: Partial<LabelElement>) => {
     e.dataTransfer.setData('application/json', JSON.stringify(elementData));
@@ -130,10 +137,25 @@ export const ElementPalette: React.FC<ElementPaletteProps> = ({
   };
 
   return (
-    <div className="w-full lg:w-56 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col h-full overflow-y-auto p-3 select-none shrink-0">
-      <h3 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-3">
-        Thêm Đối Tượng
-      </h3>
+    <div className="w-full h-full bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col overflow-y-auto p-3 select-none shrink-0">
+      <div className="flex items-center justify-between mb-3 border-b border-slate-200 dark:border-slate-800 pb-2">
+        <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+          <Plus className="w-3.5 h-3.5 text-blue-500" />
+          <span>Thêm Đối Tượng</span>
+        </h3>
+        <div className="flex items-center gap-1">
+          {onToggleCollapse && (
+            <button
+              type="button"
+              onClick={onToggleCollapse}
+              className="p-1 hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-500 rounded cursor-pointer transition-colors"
+              title="Thu gọn thanh bên trái"
+            >
+              <PanelLeftClose className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+      </div>
 
       {/* Quick Add Section */}
       <div className="space-y-3">

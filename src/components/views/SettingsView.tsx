@@ -1,7 +1,19 @@
-import React, { useState } from 'react';
-import { Sliders, Printer, Check, Info, RefreshCw, FileText, Save } from 'lucide-react';
-import { LabelSizePreset } from '../../types/label';
+import React, { useState, useRef } from 'react';
+import {
+  Sliders,
+  Printer,
+  Check,
+  Save,
+  HardDriveDownload,
+  Upload,
+  ShieldCheck,
+  FileCode,
+  Database,
+  RefreshCw,
+} from 'lucide-react';
+import { LabelSizePreset, LabelTemplate, DatasetRow } from '../../types/label';
 import { ToastNotification, ToastState } from '../common/CustomAlert';
+import { exportFullBackupJson, importFullBackupJson, AppBackupData } from '../../utils/backupStorage';
 
 export const LABEL_SIZE_PRESETS: LabelSizePreset[] = [
   {
@@ -52,6 +64,10 @@ interface SettingsViewProps {
   customWidthMm: number;
   customHeightMm: number;
   onUpdateCustomSize: (w: number, h: number) => void;
+  currentTemplate?: LabelTemplate;
+  allTemplates?: LabelTemplate[];
+  dataset?: DatasetRow[];
+  onRestoreBackup?: (backup: AppBackupData) => void;
 }
 
 export const SettingsView: React.FC<SettingsViewProps> = ({
@@ -60,9 +76,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   customWidthMm,
   customHeightMm,
   onUpdateCustomSize,
+  currentTemplate,
+  allTemplates = [],
+  dataset = [],
+  onRestoreBackup,
 }) => {
   const [widthInput, setWidthInput] = useState(String(customWidthMm));
   const [heightInput, setHeightInput] = useState(String(customHeightMm));
+  const backupFileInputRef = useRef<HTMLInputElement | null>(null);
 
   const [toastState, setToastState] = useState<ToastState>({
     isOpen: false,
@@ -92,6 +113,36 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     showToast('Đã chọn khổ tem', `Đã áp dụng mẫu khổ tem ${preset.widthMm} x ${preset.heightMm} mm (${preset.name}).`, 'success');
   };
 
+  const handleExportBackup = () => {
+    if (!currentTemplate) return;
+    try {
+      exportFullBackupJson(currentTemplate, allTemplates, dataset, {
+        customWidthMm,
+        customHeightMm,
+        activePresetId,
+      });
+      showToast('Tải file dự phòng thành công', 'File backup .JSON chứa toàn bộ cấu hình mẫu tem và dữ liệu đã được tải về máy.');
+    } catch (e) {
+      showToast('Lỗi xuất file dự phòng', String(e), 'error');
+    }
+  };
+
+  const handleRestoreFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const backup = await importFullBackupJson(file);
+      if (onRestoreBackup) {
+        onRestoreBackup(backup);
+        showToast('Khôi phục dữ liệu thành công', 'Đã tải toàn bộ mẫu tem và danh sách dữ liệu từ file backup JSON.');
+      }
+    } catch (err: any) {
+      showToast('Lỗi đọc file JSON dự phòng', String(err), 'error');
+    } finally {
+      if (backupFileInputRef.current) backupFileInputRef.current.value = '';
+    }
+  };
+
   return (
     <div className="flex-1 bg-slate-100 dark:bg-slate-950 overflow-y-auto p-6 text-xs space-y-6">
       {/* Header */}
@@ -102,10 +153,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           </div>
           <div>
             <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">
-              Cấu Hình Khổ Tem & Thông Số Máy In Nhiệt
+              Cấu Hình Khổ Tem & Quản Lý Dữ Liệu Dự Phòng
             </h2>
             <p className="text-slate-500 dark:text-slate-400 mt-0.5">
-              Lựa chọn kích thước giấy nhiệt chuẩn hoặc thiết lập thông số mm tùy chỉnh cho máy in của bạn.
+              Tùy chỉnh thông số máy in nhiệt và xuất/nhập file JSON sao lưu an toàn cho toàn bộ dữ liệu ứng dụng.
             </p>
           </div>
         </div>
@@ -117,6 +168,76 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           <Save className="w-4 h-4" />
           <span>Lưu Cấu Hình Máy In</span>
         </button>
+      </div>
+
+      {/* Backup & Restore Section */}
+      <div className="p-5 bg-gradient-to-r from-indigo-900 via-slate-900 to-indigo-950 text-white rounded-2xl shadow-xl border border-indigo-800/60 space-y-4">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2.5 rounded-xl bg-indigo-600/80 text-white shadow-inner">
+              <Database className="w-5 h-5 text-indigo-200" />
+            </div>
+            <div>
+              <h3 className="font-bold text-sm text-white flex items-center gap-2">
+                <span>Sao Lưu & Phục Hồi Dữ Liệu Dự Phòng (JSON Backup)</span>
+                <span className="px-2 py-0.5 text-[10px] font-extrabold uppercase bg-indigo-500/30 text-indigo-200 rounded-md border border-indigo-400/30">
+                  An Toàn Tối Đa
+                </span>
+              </h3>
+              <p className="text-indigo-200/80 text-[11px] mt-0.5">
+                Bên cạnh đồng bộ với Firebase, bạn có thể tải về file .JSON dự phòng chứa toàn bộ mẫu tem và danh sách dữ liệu Excel.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+          {/* Export JSON Button */}
+          <button
+            onClick={handleExportBackup}
+            disabled={!currentTemplate}
+            className="p-4 rounded-xl bg-white/10 hover:bg-white/15 border border-white/20 flex items-center gap-3 transition-all cursor-pointer text-left group"
+          >
+            <div className="p-3 rounded-lg bg-indigo-500 text-white group-hover:scale-105 transition-transform shrink-0">
+              <HardDriveDownload className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="font-bold text-xs text-white group-hover:text-indigo-200 transition-colors">
+                Xuất Dữ Liệu Dự Phòng (.JSON)
+              </div>
+              <div className="text-[11px] text-indigo-200/70 mt-0.5">
+                Tải file .JSON sao lưu {allTemplates.length} mẫu tem và {dataset.length} dòng dữ liệu hiện tại.
+              </div>
+            </div>
+          </button>
+
+          {/* Import JSON Restore Button */}
+          <div>
+            <input
+              type="file"
+              ref={backupFileInputRef}
+              accept=".json"
+              onChange={handleRestoreFileSelect}
+              className="hidden"
+            />
+            <button
+              onClick={() => backupFileInputRef.current?.click()}
+              className="w-full h-full p-4 rounded-xl bg-white/10 hover:bg-white/15 border border-white/20 flex items-center gap-3 transition-all cursor-pointer text-left group"
+            >
+              <div className="p-3 rounded-lg bg-emerald-500 text-white group-hover:scale-105 transition-transform shrink-0">
+                <Upload className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="font-bold text-xs text-white group-hover:text-emerald-200 transition-colors">
+                  Phục Hồi Dữ Liệu Từ File Backup (.JSON)
+                </div>
+                <div className="text-[11px] text-indigo-200/70 mt-0.5">
+                  Chọn file .JSON dự phòng đã xuất để nạp lại đầy đủ các mẫu tem và dữ liệu.
+                </div>
+              </div>
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Preset Label Sizes Grid */}

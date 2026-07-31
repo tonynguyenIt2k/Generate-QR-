@@ -1,12 +1,8 @@
 {
-  "projectId": "stone-buttress-w98sv",
-  "appId": "1:498747812775:web:75b13f44cb38596da86482",
-  "apiKey": "AIzaSyCRfRCOWuNHwZyMm45HzXPDIPXfjy3Xlu0",
-  "authDomain": "stone-buttress-w98sv.firebaseapp.com",
-  "firestoreDatabaseId": "ai-studio-qrlabelgenerator-5838f38c-79c5-4cce-809a-4cad75222d87",
-  "storageBucket": "stone-buttress-w98sv.firebasestorage.app",
-  "messagingSenderId": "498747812775",
-  "measurementId": "",
-  "oAuthClientId": "498747812775-hl1rs6pjpk2rbi8rd93fnhl88nglt3b9.apps.googleusercontent.com",
-  "recaptchaSiteKey": ""
+  "projectId": "qr-smart-db1a0",
+  "appId": "1:150848590110:web:123e9bdad7c252974df90f",
+  "apiKey": "AIzaSyBWIz93afkxfmNPCFcF2xursIWCs_W1ERU",
+  "authDomain": "qr-smart-db1a0.firebaseapp.com",
+  "storageBucket": "qr-smart-db1a0.firebasestorage.app",
+  "messagingSenderId": "150848590110"
 }

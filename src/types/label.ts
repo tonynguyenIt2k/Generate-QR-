@@ -16,6 +16,7 @@ export interface BaseElement {
   zIndex: number;
   locked?: boolean;
   visible?: boolean;
+  groupId?: string;
 }
 
 export interface TextElement extends BaseElement {
@@ -108,9 +109,12 @@ export interface LabelTemplate {
   updatedAt: string;
   thumbnailUrl?: string;
   sampleData?: Record<string, any>;
+  isDualPart?: boolean;
+  isCustom?: boolean;
+  isFavorite?: boolean;
 }
 
-export type DatasetRow = Record<string, string | number>;
+export type DatasetRow = Record<string, any>;
 
 export interface GeneratedLabel {
   id: string;

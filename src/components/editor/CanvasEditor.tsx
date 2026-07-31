@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { DatasetRow, LabelElement, LabelTemplate } from '../../types/label';
 import { substituteVariables } from '../../utils/excelHelper';
 import { RulerAndGrid } from './RulerAndGrid';
@@ -31,6 +31,12 @@ import {
   MousePointer,
   Sparkles,
   Upload,
+  Pencil,
+  X,
+  Group,
+  Ungroup,
+  Folder,
+  Component,
 } from 'lucide-react';
 
 interface CanvasEditorProps {
@@ -39,15 +45,20 @@ interface CanvasEditorProps {
   selectedElementId: string | null;
   onSelectElement: (id: string | null) => void;
   onUpdateElement: (updated: LabelElement, saveHistory?: boolean) => void;
+  onUpdateElements?: (updated: LabelElement[], saveHistory?: boolean) => void;
   onAddElement?: (element: Partial<LabelElement>) => void;
   onDeleteElement?: (id?: string) => void;
   onDuplicateElement?: (id?: string) => void;
   onLayerMove?: (direction: 'up' | 'down') => void;
   zoom: number;
+  onZoomChange?: (newZoom: number) => void;
   showGrid: boolean;
   snapToGrid: boolean;
   previewVariables: boolean;
   sampleDataRow: DatasetRow;
+  secondDataRow?: DatasetRow;
+  dataset?: DatasetRow[];
+  onUpdateDatasetValue?: (key: string, value: string) => void;
 }
 
 export const CanvasEditor: React.FC<CanvasEditorProps> = ({
@@ -56,20 +67,32 @@ export const CanvasEditor: React.FC<CanvasEditorProps> = ({
   selectedElementId,
   onSelectElement,
   onUpdateElement,
+  onUpdateElements,
   onAddElement,
   onDeleteElement,
   onDuplicateElement,
   onLayerMove,
   zoom,
+  onZoomChange,
   showGrid,
   snapToGrid,
   previewVariables,
   sampleDataRow,
+  secondDataRow,
+  dataset,
+  onUpdateDatasetValue,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const printableRef = useRef<HTMLDivElement>(null);
   const [isDragOverCanvas, setIsDragOverCanvas] = useState(false);
   const [editingTextId, setEditingTextId] = useState<string | null>(null);
+  const modalOpenTimeRef = useRef<number>(0);
+
+  useEffect(() => {
+    if (editingTextId) {
+      modalOpenTimeRef.current = Date.now();
+    }
+  }, [editingTextId]);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [resizingId, setResizingId] = useState<string | null>(null);
   const [resizeHandle, setResizeHandle] = useState<string | null>(null);
@@ -88,6 +111,16 @@ export const CanvasEditor: React.FC<CanvasEditorProps> = ({
     elW: 0,
     elH: 0,
   });
+
+  // Multi-Selection & Grouping States
+  const [selectedElementIds, setSelectedElementIds] = useState<string[]>([]);
+  const [marqueeStart, setMarqueeStart] = useState<{ xPx: number; yPx: number } | null>(null);
+  const [marqueeEnd, setMarqueeEnd] = useState<{ xPx: number; yPx: number } | null>(null);
+  const [multiDragStart, setMultiDragStart] = useState<{
+    x: number;
+    y: number;
+    positions: Record<string, { x: number; y: number }>;
+  } | null>(null);
 
   // Mouse hover position & live HUD coordinates
   const [mouseCanvasPos, setMouseCanvasPos] = useState<{ xMm: number; yMm: number } | null>(null);
@@ -111,6 +144,157 @@ export const CanvasEditor: React.FC<CanvasEditorProps> = ({
 
   const canvasWidthPx = mmToPx(template.widthMm);
   const canvasHeightPx = mmToPx(template.heightMm);
+
+  // Sync selectedElementIds when selectedElementId prop or elements change
+  useEffect(() => {
+    if (selectedElementId) {
+      const target = elements.find((e) => e.id === selectedElementId);
+      if (target?.groupId) {
+        const groupMembers = elements.filter((e) => e.groupId === target.groupId).map((e) => e.id);
+        setSelectedElementIds(groupMembers);
+      } else {
+        setSelectedElementIds((prev) => (prev.includes(selectedElementId) ? prev : [selectedElementId]));
+      }
+    } else {
+      setSelectedElementIds([]);
+    }
+  }, [selectedElementId, elements]);
+
+  // Helper to select an element or its group with Shift key support
+  const selectElementOrGroup = useCallback(
+    (id: string | null, isShift: boolean = false) => {
+      if (!id) {
+        setSelectedElementIds([]);
+        onSelectElement(null);
+        return;
+      }
+      const target = elements.find((e) => e.id === id);
+      if (!target) return;
+
+      const targetGroupIds = target.groupId
+        ? elements.filter((e) => e.groupId === target.groupId).map((e) => e.id)
+        : [target.id];
+
+      if (isShift) {
+        setSelectedElementIds((prev) => {
+          const alreadyIn = targetGroupIds.every((gId) => prev.includes(gId));
+          let updated: string[];
+          if (alreadyIn) {
+            updated = prev.filter((gId) => !targetGroupIds.includes(gId));
+          } else {
+            updated = Array.from(new Set([...prev, ...targetGroupIds]));
+          }
+          onSelectElement(updated[0] || null);
+          return updated;
+        });
+      } else {
+        setSelectedElementIds(targetGroupIds);
+        onSelectElement(targetGroupIds[0] || null);
+      }
+    },
+    [elements, onSelectElement]
+  );
+
+  // Grouping Action Handler
+  const handleGroupElements = useCallback(() => {
+    if (selectedElementIds.length < 2) return;
+    const newGroupId = `group_${Date.now()}`;
+    const updated = elements.map((el) => {
+      if (selectedElementIds.includes(el.id)) {
+        return { ...el, groupId: newGroupId };
+      }
+      return el;
+    });
+
+    if (onUpdateElements) {
+      onUpdateElements(updated, true);
+    } else {
+      updated.forEach((el) => {
+        if (selectedElementIds.includes(el.id)) {
+          onUpdateElement(el, true);
+        }
+      });
+    }
+  }, [selectedElementIds, elements, onUpdateElements, onUpdateElement]);
+
+  // Ungrouping Action Handler
+  const handleUngroupElements = useCallback(() => {
+    if (selectedElementIds.length === 0) return;
+    const groupIds = new Set(
+      elements
+        .filter((el) => selectedElementIds.includes(el.id) && el.groupId)
+        .map((el) => el.groupId!)
+    );
+
+    if (groupIds.size === 0) return;
+
+    const updated = elements.map((el) => {
+      if (el.groupId && groupIds.has(el.groupId)) {
+        const copy = { ...el };
+        delete copy.groupId;
+        return copy;
+      }
+      return el;
+    });
+
+    if (onUpdateElements) {
+      onUpdateElements(updated, true);
+    } else {
+      updated.forEach((el) => {
+        if (el.groupId && groupIds.has(el.groupId)) {
+          const copy = { ...el };
+          delete copy.groupId;
+          onUpdateElement(copy, true);
+        }
+      });
+    }
+  }, [selectedElementIds, elements, onUpdateElements, onUpdateElement]);
+
+  // Group Alignment Action Handler
+  const handleAlignSelected = useCallback(
+    (direction: 'left' | 'center' | 'right' | 'top' | 'middle' | 'bottom') => {
+      if (selectedElementIds.length === 0) return;
+      const selectedEls = elements.filter((el) => selectedElementIds.includes(el.id));
+      if (selectedEls.length === 0) return;
+
+      const minX = Math.min(...selectedEls.map((e) => e.x));
+      const maxX = Math.max(...selectedEls.map((e) => e.x + e.width));
+      const minY = Math.min(...selectedEls.map((e) => e.y));
+      const maxY = Math.max(...selectedEls.map((e) => e.y + e.height));
+
+      const centerX = minX + (maxX - minX) / 2;
+      const centerY = minY + (maxY - minY) / 2;
+
+      const updated = elements.map((el) => {
+        if (!selectedElementIds.includes(el.id) || el.locked) return el;
+        let x = el.x;
+        let y = el.y;
+
+        if (direction === 'left') x = minX;
+        else if (direction === 'center') x = centerX - el.width / 2;
+        else if (direction === 'right') x = maxX - el.width;
+        else if (direction === 'top') y = minY;
+        else if (direction === 'middle') y = centerY - el.height / 2;
+        else if (direction === 'bottom') y = maxY - el.height;
+
+        x = Math.round(Math.max(0, x) * 10) / 10;
+        y = Math.round(Math.max(0, y) * 10) / 10;
+
+        return { ...el, x, y };
+      });
+
+      if (onUpdateElements) {
+        onUpdateElements(updated, true);
+      } else {
+        updated.forEach((el) => {
+          if (selectedElementIds.includes(el.id)) {
+            onUpdateElement(el, true);
+          }
+        });
+      }
+    },
+    [selectedElementIds, elements, onUpdateElements, onUpdateElement]
+  );
 
   // Clear editingTextId if selectedElementId changes
   useEffect(() => {
@@ -139,6 +323,49 @@ export const CanvasEditor: React.FC<CanvasEditorProps> = ({
 
   const sampleDataSignature = JSON.stringify(sampleDataRow);
 
+  // Helper for dual-part template element dataset resolution (Odd/Row 1 = Top, Even/Row 2 = Bottom)
+  const getElementDataRow = useCallback(
+    (el: LabelElement): Record<string, any> => {
+      const isDual = template.isDualPart || template.id.includes('dual');
+      if (!isDual) return sampleDataRow;
+
+      const isTop = el.id.startsWith('top-') || el.y + el.height / 2 < template.heightMm / 2;
+
+      // 1. If explicit dataset passed with >= 2 rows
+      if (dataset && dataset.length >= 2) {
+        return isTop ? dataset[0] : dataset[1];
+      }
+      if (secondDataRow && Object.keys(secondDataRow).length > 0) {
+        return isTop ? sampleDataRow : secondDataRow;
+      }
+
+      // 2. If row has _oddRow or _evenRow attached
+      if (sampleDataRow._oddRow || sampleDataRow._evenRow) {
+        return isTop ? sampleDataRow._oddRow || sampleDataRow : sampleDataRow._evenRow || {};
+      }
+
+      // 3. If template has sampleData._sampleOdd / _sampleEven
+      if (sampleDataRow._sampleOdd || sampleDataRow._sampleEven) {
+        return isTop ? sampleDataRow._sampleOdd || sampleDataRow : sampleDataRow._sampleEven || sampleDataRow;
+      }
+
+      // 4. Default fallback: Top gets sampleDataRow, Bottom gets modified Serial/IMEI
+      if (isTop) return sampleDataRow;
+      return {
+        ...sampleDataRow,
+        Serial: sampleDataRow.Serial
+          ? String(sampleDataRow.Serial).includes('01')
+            ? String(sampleDataRow.Serial).replace('01', '02')
+            : `${sampleDataRow.Serial}-2`
+          : 'F2LXK982P02',
+        IMEI: sampleDataRow.IMEI
+          ? String(sampleDataRow.IMEI).replace(/1$/, '2')
+          : '356782091234562',
+      };
+    },
+    [template, sampleDataRow, secondDataRow, dataset]
+  );
+
   // Load QR & Barcode preview data URLs
   useEffect(() => {
     let active = true;
@@ -148,8 +375,9 @@ export const CanvasEditor: React.FC<CanvasEditorProps> = ({
       const newBar: Record<string, string> = {};
 
       for (const el of elements) {
+        const elDataRow = getElementDataRow(el);
         if (el.type === 'qr') {
-          const content = previewVariables ? substituteVariables(el.content, sampleDataRow) : el.content;
+          const content = previewVariables ? substituteVariables(el.content, elDataRow) : el.content;
           const url = await generateQRDataUrl({
             content,
             fgColor: el.fgColor,
@@ -161,7 +389,7 @@ export const CanvasEditor: React.FC<CanvasEditorProps> = ({
           });
           newQr[el.id] = url;
         } else if (el.type === 'barcode') {
-          const content = previewVariables ? substituteVariables(el.content, sampleDataRow) : el.content;
+          const content = previewVariables ? substituteVariables(el.content, elDataRow) : el.content;
           const url = generateBarcodeDataUrl({
             content,
             format: el.format,
@@ -185,7 +413,7 @@ export const CanvasEditor: React.FC<CanvasEditorProps> = ({
     return () => {
       active = false;
     };
-  }, [qrBarcodeSignature, previewVariables, sampleDataSignature]);
+  }, [qrBarcodeSignature, previewVariables, sampleDataSignature, getElementDataRow]);
 
   // Track Mouse Movement over canvas surface
   const handleCanvasMouseMove = (e: React.MouseEvent) => {
@@ -259,18 +487,189 @@ export const CanvasEditor: React.FC<CanvasEditorProps> = ({
     });
   };
 
+  // Rubber-band marquee selection handlers
+  useEffect(() => {
+    if (!marqueeStart) return;
+
+    const handleWindowMouseMove = (e: MouseEvent) => {
+      if (!printableRef.current) return;
+      const rect = printableRef.current.getBoundingClientRect();
+      const xPx = e.clientX - rect.left;
+      const yPx = e.clientY - rect.top;
+      setMarqueeEnd({ xPx, yPx });
+    };
+
+    const handleWindowMouseUp = (e: MouseEvent) => {
+      if (marqueeStart && marqueeEnd && printableRef.current) {
+        const dx = Math.abs(marqueeEnd.xPx - marqueeStart.xPx);
+        const dy = Math.abs(marqueeEnd.yPx - marqueeStart.yPx);
+
+        if (dx > 5 || dy > 5) {
+          const minXmm = pxToMm(Math.min(marqueeStart.xPx, marqueeEnd.xPx));
+          const maxXmm = pxToMm(Math.max(marqueeStart.xPx, marqueeEnd.xPx));
+          const minYmm = pxToMm(Math.min(marqueeStart.yPx, marqueeEnd.yPx));
+          const maxYmm = pxToMm(Math.max(marqueeStart.yPx, marqueeEnd.yPx));
+
+          const hit = elements.filter((el) => {
+            if (el.visible === false) return false;
+            const elRight = el.x + el.width;
+            const elBottom = el.y + el.height;
+            return !(el.x > maxXmm || elRight < minXmm || el.y > maxYmm || elBottom < minYmm);
+          });
+
+          const hitGroupIds = new Set<string>();
+          hit.forEach((el) => {
+            if (el.groupId) {
+              elements.filter((e) => e.groupId === el.groupId).forEach((e) => hitGroupIds.add(e.id));
+            } else {
+              hitGroupIds.add(el.id);
+            }
+          });
+
+          const finalIds = Array.from(hitGroupIds);
+          if (finalIds.length > 0) {
+            setSelectedElementIds(finalIds);
+            onSelectElement(finalIds[0]);
+          } else if (!e.shiftKey) {
+            setSelectedElementIds([]);
+            onSelectElement(null);
+          }
+        }
+      }
+      setMarqueeStart(null);
+      setMarqueeEnd(null);
+    };
+
+    window.addEventListener('mousemove', handleWindowMouseMove);
+    window.addEventListener('mouseup', handleWindowMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleWindowMouseMove);
+      window.removeEventListener('mouseup', handleWindowMouseUp);
+    };
+  }, [marqueeStart, marqueeEnd, elements, pxToMm, onSelectElement]);
+
+  // Global Hotkeys Listener for Grouping, Delete, Arrow Nudge
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement)?.tagName)) {
+        return;
+      }
+
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'g') {
+        e.preventDefault();
+        if (e.shiftKey) {
+          handleUngroupElements();
+        } else {
+          handleGroupElements();
+        }
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') {
+        e.preventDefault();
+        const allIds = elements.filter((el) => el.visible !== false && !el.locked).map((el) => el.id);
+        setSelectedElementIds(allIds);
+        if (allIds.length > 0) onSelectElement(allIds[0]);
+      } else if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (selectedElementIds.length > 0 && !editingTextId) {
+          e.preventDefault();
+          if (onDeleteElement) {
+            selectedElementIds.forEach((id) => onDeleteElement(id));
+          }
+          setSelectedElementIds([]);
+          onSelectElement(null);
+        }
+      } else if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key) && selectedElementIds.length > 0) {
+        e.preventDefault();
+        const step = e.shiftKey ? 2.0 : 0.5;
+        let dx = 0;
+        let dy = 0;
+        if (e.key === 'ArrowLeft') dx = -step;
+        if (e.key === 'ArrowRight') dx = step;
+        if (e.key === 'ArrowUp') dy = -step;
+        if (e.key === 'ArrowDown') dy = step;
+
+        const updated = elements.map((el) => {
+          if (selectedElementIds.includes(el.id) && !el.locked) {
+            return {
+              ...el,
+              x: Math.round(Math.max(0, el.x + dx) * 10) / 10,
+              y: Math.round(Math.max(0, el.y + dy) * 10) / 10,
+            };
+          }
+          return el;
+        });
+
+        if (onUpdateElements) {
+          onUpdateElements(updated, true);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [
+    selectedElementIds,
+    elements,
+    editingTextId,
+    handleGroupElements,
+    handleUngroupElements,
+    onDeleteElement,
+    onSelectElement,
+    onUpdateElements,
+  ]);
+
   // Handle Mouse Drag / Move
   const handleMouseDownElement = (e: React.MouseEvent, el: LabelElement) => {
-    if (el.locked || editingTextId === el.id) return;
+    if (el.locked) return;
     if (e.button !== 0) return; // Only primary left click
     e.stopPropagation();
+
+    // Direct inline text editing on double click
+    if (e.detail === 2 && el.type === 'text') {
+      e.preventDefault();
+      onSelectElement(el.id);
+      setEditingTextId(el.id);
+      setDraggingId(null);
+      return;
+    }
+
+    if (editingTextId === el.id) return;
+
     e.preventDefault();
-    onSelectElement(el.id);
+
+    const isShift = e.shiftKey || e.metaKey || e.ctrlKey;
+    let currentSelection = selectedElementIds;
+
+    if (!selectedElementIds.includes(el.id) && !isShift) {
+      selectElementOrGroup(el.id, false);
+      currentSelection = el.groupId
+        ? elements.filter((item) => item.groupId === el.groupId).map((item) => item.id)
+        : [el.id];
+    } else if (isShift) {
+      selectElementOrGroup(el.id, true);
+      currentSelection = selectedElementIds.includes(el.id)
+        ? selectedElementIds.filter((id) => id !== el.id)
+        : [...selectedElementIds, el.id];
+    }
+
     if (editingTextId && editingTextId !== el.id) {
       setEditingTextId(null);
     }
 
     setDraggingId(el.id);
+
+    // Store start positions of ALL items in currentSelection
+    const startPositions: Record<string, { x: number; y: number }> = {};
+    elements.forEach((item) => {
+      if (currentSelection.includes(item.id)) {
+        startPositions[item.id] = { x: item.x, y: item.y };
+      }
+    });
+
+    setMultiDragStart({
+      x: e.clientX,
+      y: e.clientY,
+      positions: startPositions,
+    });
+
     setDragStart({
       x: e.clientX,
       y: e.clientY,
@@ -287,12 +686,26 @@ export const CanvasEditor: React.FC<CanvasEditorProps> = ({
     if (e.touches.length !== 1) return;
     e.stopPropagation();
     const touch = e.touches[0];
-    onSelectElement(el.id);
+
+    selectElementOrGroup(el.id, false);
     if (editingTextId && editingTextId !== el.id) {
       setEditingTextId(null);
     }
 
     setDraggingId(el.id);
+    const startPositions: Record<string, { x: number; y: number }> = {};
+    elements.forEach((item) => {
+      if (selectedElementIds.includes(item.id) || item.id === el.id) {
+        startPositions[item.id] = { x: item.x, y: item.y };
+      }
+    });
+
+    setMultiDragStart({
+      x: touch.clientX,
+      y: touch.clientY,
+      positions: startPositions,
+    });
+
     setDragStart({
       x: touch.clientX,
       y: touch.clientY,
@@ -345,11 +758,13 @@ export const CanvasEditor: React.FC<CanvasEditorProps> = ({
     resizingId,
     resizeHandle,
     dragStart,
+    multiDragStart,
     elements,
     snapToGrid,
     template,
     zoom,
     onUpdateElement,
+    onUpdateElements,
   });
 
   useEffect(() => {
@@ -358,11 +773,13 @@ export const CanvasEditor: React.FC<CanvasEditorProps> = ({
       resizingId,
       resizeHandle,
       dragStart,
+      multiDragStart,
       elements,
       snapToGrid,
       template,
       zoom,
       onUpdateElement,
+      onUpdateElements,
     };
   });
 
@@ -375,41 +792,47 @@ export const CanvasEditor: React.FC<CanvasEditorProps> = ({
         resizingId,
         resizeHandle,
         dragStart,
+        multiDragStart,
         elements,
         snapToGrid,
         zoom,
         onUpdateElement: updateFn,
+        onUpdateElements: updateFnPlural,
       } = dragRef.current;
 
       const safeZoom = Math.max(0.1, zoom || 1);
       const pxToMmVal = (px: number) => px / ((96 / 25.4) * safeZoom);
 
-      if (draggingId) {
-        const dxPx = clientX - dragStart.x;
-        const dyPx = clientY - dragStart.y;
+      if (draggingId && multiDragStart && Object.keys(multiDragStart.positions).length > 0) {
+        const dxPx = clientX - multiDragStart.x;
+        const dyPx = clientY - multiDragStart.y;
+        const dxMm = pxToMmVal(dxPx);
+        const dyMm = pxToMmVal(dyPx);
 
-        let newX = dragStart.elX + pxToMmVal(dxPx);
-        let newY = dragStart.elY + pxToMmVal(dyPx);
-
-        if (isNaN(newX) || !isFinite(newX)) newX = dragStart.elX;
-        if (isNaN(newY) || !isFinite(newY)) newY = dragStart.elY;
-
-        if (snapToGrid) {
-          const gridStep = 1.0; // 1mm step
-          newX = Math.round(newX / gridStep) * gridStep;
-          newY = Math.round(newY / gridStep) * gridStep;
-        }
-
-        const el = elements.find((item) => item.id === draggingId);
-        if (el) {
-          updateFn(
-            {
-              ...el,
+        const updatedEls = elements.map((item) => {
+          if (multiDragStart.positions[item.id] && !item.locked) {
+            const start = multiDragStart.positions[item.id];
+            let newX = start.x + dxMm;
+            let newY = start.y + dyMm;
+            if (snapToGrid) {
+              const gridStep = 1.0;
+              newX = Math.round(newX / gridStep) * gridStep;
+              newY = Math.round(newY / gridStep) * gridStep;
+            }
+            return {
+              ...item,
               x: Math.round(Math.max(0, newX) * 10) / 10,
               y: Math.round(Math.max(0, newY) * 10) / 10,
-            },
-            false
-          );
+            };
+          }
+          return item;
+        });
+
+        if (updateFnPlural) {
+          updateFnPlural(updatedEls, false);
+        } else {
+          const el = updatedEls.find((item) => item.id === draggingId);
+          if (el) updateFn(el, false);
         }
       } else if (resizingId && resizeHandle) {
         const dxPx = clientX - dragStart.x;
@@ -470,15 +893,24 @@ export const CanvasEditor: React.FC<CanvasEditorProps> = ({
     };
 
     const handlePointerUp = () => {
-      const { draggingId, resizingId, elements, onUpdateElement: updateFn } = dragRef.current;
-      const targetId = draggingId || resizingId;
-      if (targetId) {
-        const el = elements.find((item) => item.id === targetId);
+      const {
+        draggingId,
+        resizingId,
+        elements,
+        onUpdateElement: updateFn,
+        onUpdateElements: updateFnPlural,
+      } = dragRef.current;
+
+      if (draggingId && updateFnPlural) {
+        updateFnPlural(elements, true);
+      } else if (resizingId) {
+        const el = elements.find((item) => item.id === resizingId);
         if (el) {
           updateFn({ ...el }, true);
         }
       }
       setDraggingId(null);
+      setMultiDragStart(null);
       setResizingId(null);
       setResizeHandle(null);
     };
@@ -572,14 +1004,59 @@ export const CanvasEditor: React.FC<CanvasEditorProps> = ({
   const selectedElement = elements.find((el) => el.id === selectedElementId);
   const sortedElements = [...elements].sort((a, b) => a.zIndex - b.zIndex);
 
+  const handleFitCanvas = () => {
+    if (!containerRef.current || !onZoomChange) return;
+    const contW = containerRef.current.clientWidth - 80;
+    const contH = containerRef.current.clientHeight - 80;
+    if (contW <= 0 || contH <= 0) return;
+    const pxPerMm = 96 / 25.4; // ~3.7795
+    const zoomW = contW / (template.widthMm * pxPerMm);
+    const zoomH = contH / (template.heightMm * pxPerMm);
+    const idealZoom = Math.min(zoomW, zoomH);
+    const clampedZoom = Math.max(1.0, Math.min(10.0, Math.round(idealZoom * 10) / 10));
+    onZoomChange(clampedZoom);
+  };
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      handleFitCanvas();
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [template.widthMm, template.heightMm, template.id]);
+
+  const handleWheelZoom = (e: React.WheelEvent) => {
+    if ((e.ctrlKey || e.metaKey) && onZoomChange) {
+      e.preventDefault();
+      const delta = e.deltaY < 0 ? 0.2 : -0.2;
+      const nextZoom = Math.max(0.5, Math.min(5.0, Math.round((zoom + delta) * 100) / 100));
+      onZoomChange(nextZoom);
+    }
+  };
+
+  const selectedEls = elements.filter((el) => selectedElementIds.includes(el.id));
+  const hasGroupSelected = selectedEls.some((e) => e.groupId);
+  const multiSelectionBoundingBox =
+    selectedEls.length > 1
+      ? {
+          minX: Math.min(...selectedEls.map((e) => e.x)),
+          maxX: Math.max(...selectedEls.map((e) => e.x + e.width)),
+          minY: Math.min(...selectedEls.map((e) => e.y)),
+          maxY: Math.max(...selectedEls.map((e) => e.y + e.height)),
+        }
+      : null;
+
   return (
     <div
       ref={containerRef}
-      onClick={() => {
-        onSelectElement(null);
-        setEditingTextId(null);
+      onWheel={handleWheelZoom}
+      onClick={(e) => {
+        if (Date.now() - modalOpenTimeRef.current < 350) return;
+        if (e.target === containerRef.current) {
+          selectElementOrGroup(null);
+          setEditingTextId(null);
+        }
       }}
-      className="flex-1 bg-slate-200 dark:bg-slate-950 overflow-auto relative flex items-center justify-center p-12 select-none"
+      className="flex-1 bg-slate-200 dark:bg-slate-950 overflow-auto relative flex items-center justify-center p-6 sm:p-8 select-none"
     >
       {/* HUD Mouse Coordinates Indicator */}
       {mouseCanvasPos && (
@@ -590,20 +1067,78 @@ export const CanvasEditor: React.FC<CanvasEditorProps> = ({
           </span>
           {selectedElement && (
             <span className="text-slate-400 border-l border-slate-700 pl-2">
-              Chọne: {selectedElement.width}x{selectedElement.height} mm
+              Chọn: {selectedElement.width}x{selectedElement.height} mm
             </span>
           )}
         </div>
       )}
 
+      {/* Floating Action Toolbar for Multi-Selection & Grouping */}
+      {selectedElementIds.length > 1 && (
+        <div className="absolute top-4 right-4 bg-slate-900/90 text-slate-100 backdrop-blur-md px-3.5 py-2 rounded-2xl text-xs font-sans border border-slate-700/80 shadow-2xl flex items-center gap-2 z-40 animate-fade-in">
+          <span className="font-bold text-blue-400 text-[11px] font-mono mr-1">
+            Đã chọn {selectedElementIds.length} phần tử
+          </span>
+          <button
+            onClick={handleGroupElements}
+            className="px-2.5 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-medium text-[11px] flex items-center gap-1.5 transition-colors shadow-xs cursor-pointer"
+            title="Nhóm các phần tử (Ctrl+G)"
+          >
+            <Group className="w-3.5 h-3.5" />
+            <span>Nhóm (Group)</span>
+          </button>
+          {hasGroupSelected && (
+            <button
+              onClick={handleUngroupElements}
+              className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg font-medium text-[11px] flex items-center gap-1.5 transition-colors shadow-xs cursor-pointer border border-slate-700"
+              title="Bỏ nhóm (Ctrl+Shift+G)"
+            >
+              <Ungroup className="w-3.5 h-3.5" />
+              <span>Bỏ Nhóm</span>
+            </button>
+          )}
+          <div className="w-px h-4 bg-slate-700 mx-1" />
+          {/* Alignment Buttons */}
+          <button
+            onClick={() => handleAlignSelected('left')}
+            className="p-1 hover:bg-slate-800 rounded text-slate-300 hover:text-white transition-colors cursor-pointer"
+            title="Căn lề trái"
+          >
+            <AlignLeft className="w-3.5 h-3.5" />
+          </button>
+          <button
+            onClick={() => handleAlignSelected('center')}
+            className="p-1 hover:bg-slate-800 rounded text-slate-300 hover:text-white transition-colors cursor-pointer"
+            title="Căn giữa ngang"
+          >
+            <AlignCenter className="w-3.5 h-3.5" />
+          </button>
+          <button
+            onClick={() => handleAlignSelected('right')}
+            className="p-1 hover:bg-slate-800 rounded text-slate-300 hover:text-white transition-colors cursor-pointer"
+            title="Căn lề phải"
+          >
+            <AlignRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
       {/* Wrapper box containing rulers and printable label */}
-      <div className="relative shadow-2xl rounded-sm border border-slate-300 dark:border-slate-800 bg-white dark:bg-slate-900 transition-all">
+      <div className="relative shadow-2xl rounded-sm border border-slate-300 dark:border-slate-800 bg-white dark:bg-slate-900 transition-all m-auto shrink-0">
         {/* Millimeter Rulers */}
         <RulerAndGrid widthMm={template.widthMm} heightMm={template.heightMm} zoom={zoom} />
 
         {/* Printable Canvas Surface */}
         <div
           ref={printableRef}
+          onMouseDown={(e) => {
+            if (e.button === 0 && e.target === printableRef.current) {
+              const rect = printableRef.current.getBoundingClientRect();
+              setMarqueeStart({ xPx: e.clientX - rect.left, yPx: e.clientY - rect.top });
+              setMarqueeEnd({ xPx: e.clientX - rect.left, yPx: e.clientY - rect.top });
+              selectElementOrGroup(null);
+            }
+          }}
           onMouseMove={handleCanvasMouseMove}
           onMouseLeave={() => setMouseCanvasPos(null)}
           onDoubleClick={handleCanvasDoubleClick}
@@ -647,11 +1182,37 @@ export const CanvasEditor: React.FC<CanvasEditorProps> = ({
             </div>
           )}
 
+          {/* Rubber-band Marquee Box Overlay */}
+          {marqueeStart && marqueeEnd && (
+            <div
+              className="absolute border border-blue-500 bg-blue-500/15 z-50 pointer-events-none rounded-xs"
+              style={{
+                left: `${Math.min(marqueeStart.xPx, marqueeEnd.xPx)}px`,
+                top: `${Math.min(marqueeStart.yPx, marqueeEnd.yPx)}px`,
+                width: `${Math.abs(marqueeEnd.xPx - marqueeStart.xPx)}px`,
+                height: `${Math.abs(marqueeEnd.yPx - marqueeStart.yPx)}px`,
+              }}
+            />
+          )}
+
+          {/* Multi-selection Bounding Box Outline Overlay */}
+          {multiSelectionBoundingBox && (
+            <div
+              className="absolute border-2 border-dashed border-blue-500 z-30 pointer-events-none rounded-xs bg-blue-500/5"
+              style={{
+                left: `${mmToPx(multiSelectionBoundingBox.minX)}px`,
+                top: `${mmToPx(multiSelectionBoundingBox.minY)}px`,
+                width: `${mmToPx(multiSelectionBoundingBox.maxX - multiSelectionBoundingBox.minX)}px`,
+                height: `${mmToPx(multiSelectionBoundingBox.maxY - multiSelectionBoundingBox.minY)}px`,
+              }}
+            />
+          )}
+
           {/* Elements Render Loop */}
           {sortedElements.map((el) => {
             if (el.visible === false) return null;
 
-            const isSelected = el.id === selectedElementId;
+            const isSelected = selectedElementIds.includes(el.id) || el.id === selectedElementId;
             const isEditing = el.id === editingTextId;
             const xPx = mmToPx(el.x);
             const yPx = mmToPx(el.y);
@@ -698,7 +1259,10 @@ export const CanvasEditor: React.FC<CanvasEditorProps> = ({
                   >
                     <button
                       onMouseDown={(e) => e.preventDefault()}
-                      onClick={() => setEditingTextId(el.id)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEditingTextId(el.id);
+                      }}
                       className="p-1 hover:bg-slate-700 rounded-lg text-slate-200 transition-colors cursor-pointer"
                       title="Sửa nội dung trực tiếp"
                     >
@@ -845,71 +1409,21 @@ export const CanvasEditor: React.FC<CanvasEditorProps> = ({
                   </div>
                 )}
 
-                {/* Direct On-Canvas Text Editing Input */}
-                {isEditing && el.type === 'text' ? (
+                {/* Element Render Content */}
+                {el.type === 'text' && (
                   <div
-                    className="w-full h-full relative z-40 bg-white/90 dark:bg-slate-900/90 rounded border-2 border-blue-600 p-0.5 shadow-lg flex items-center"
-                    onClick={(e) => e.stopPropagation()}
-                    onMouseDown={(e) => e.stopPropagation()}
-                  >
-                    <textarea
-                      autoFocus
-                      value={el.content}
-                      onChange={(e) =>
-                        onUpdateElement({
-                          ...el,
-                          content: e.target.value,
-                        })
-                      }
-                      onBlur={() => setEditingTextId(null)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && !e.shiftKey) {
-                          e.preventDefault();
-                          setEditingTextId(null);
-                        } else if (e.key === 'Escape') {
-                          setEditingTextId(null);
-                        }
-                      }}
-                      className="w-full h-full bg-transparent resize-none border-none outline-none leading-tight font-sans text-slate-900 dark:text-slate-100 p-0"
-                      style={{
-                        fontSize: `${(el.fontSize || 9) * (zoom * 1.33)}px`,
-                        fontFamily: el.fontFamily || 'sans-serif',
-                        fontWeight: el.fontWeight || 'normal',
-                        fontStyle: el.fontStyle || 'normal',
-                        color: el.color || '#0f172a',
-                        textAlign: el.textAlign || 'left',
-                      }}
-                    />
-                    <button
-                      onMouseDown={(e) => e.preventDefault()}
-                      onClick={() => setEditingTextId(null)}
-                      className="absolute -right-6 top-0 p-1 bg-blue-600 text-white rounded-md shadow hover:bg-blue-700 cursor-pointer"
-                      title="Lưu sửa"
-                    >
-                      <Check className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                ) : (
-                  <>
-                    {/* Element Render Content */}
-                    {el.type === 'text' && (
-                      <div
-                        className="w-full h-full flex items-start overflow-hidden leading-tight cursor-text"
+                    className="w-full h-full flex flex-col justify-start overflow-hidden leading-tight cursor-text whitespace-pre-wrap break-words select-none"
                         style={{
                           fontSize: `${el.fontSize * (zoom * 1.33)}px`,
                           fontFamily: el.fontFamily || 'sans-serif',
                           fontWeight: el.fontWeight || 'normal',
                           fontStyle: el.fontStyle || 'normal',
                           color: el.color || '#0f172a',
-                          justifyContent:
-                            el.textAlign === 'center'
-                              ? 'center'
-                              : el.textAlign === 'right'
-                              ? 'flex-end'
-                              : 'flex-start',
+                          lineHeight: el.lineHeight || 1.15,
+                          textAlign: el.textAlign || 'left',
                         }}
                       >
-                        {previewVariables ? substituteVariables(el.content, sampleDataRow) : el.content}
+                        {previewVariables ? substituteVariables(el.content, getElementDataRow(el)) : el.content}
                       </div>
                     )}
 
@@ -986,8 +1500,6 @@ export const CanvasEditor: React.FC<CanvasEditorProps> = ({
                         className="w-full h-full object-contain pointer-events-none"
                       />
                     )}
-                  </>
-                )}
 
                 {/* 8-Point Resize Handles for Selected Element */}
                 {isSelected && !el.locked && !isEditing && (
@@ -1111,6 +1623,24 @@ export const CanvasEditor: React.FC<CanvasEditorProps> = ({
                     <span>Xoay góc 90°</span>
                   </button>
                 )}
+                {selectedElementIds.length >= 2 && (
+                  <button
+                    onClick={handleGroupElements}
+                    className="w-full px-3 py-1.5 text-left flex items-center gap-2 hover:bg-slate-800 transition-colors text-blue-300"
+                  >
+                    <Group className="w-3.5 h-3.5 text-blue-400" />
+                    <span>Nhóm đối tượng (Ctrl+G)</span>
+                  </button>
+                )}
+                {hasGroupSelected && (
+                  <button
+                    onClick={handleUngroupElements}
+                    className="w-full px-3 py-1.5 text-left flex items-center gap-2 hover:bg-slate-800 transition-colors text-amber-300"
+                  >
+                    <Ungroup className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Bỏ nhóm đối tượng (Ctrl+Shift+G)</span>
+                  </button>
+                )}
               </div>
               <div className="py-1">
                 {onDeleteElement && (
@@ -1230,6 +1760,139 @@ export const CanvasEditor: React.FC<CanvasEditorProps> = ({
           )}
         </div>
       )}
+
+      {/* Global Floating Text Editing Modal Overlay */}
+      {(() => {
+        if (!editingTextId) return null;
+        const editingEl = elements.find((e) => e.id === editingTextId);
+        if (!editingEl || editingEl.type !== 'text') return null;
+
+        const varMatch = (editingEl.content || '').match(/\{\{\s*([a-zA-Z0-9_]+)(?:\s*\|\s*[a-zA-Z0-9_]+)?\s*\}\}/);
+        const linkedVar = varMatch ? varMatch[1] : null;
+        const isVarMode = Boolean(linkedVar && previewVariables && onUpdateDatasetValue);
+        const currentValue = isVarMode
+          ? String(sampleDataRow[linkedVar!] ?? '')
+          : editingEl.content;
+
+        return (
+          <div
+            className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fade-in"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (e.target === e.currentTarget && Date.now() - modalOpenTimeRef.current > 350) {
+                setEditingTextId(null);
+              }
+            }}
+          >
+            <div
+              className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-2xl max-w-md w-full ring-1 ring-black/10 dark:ring-white/10 space-y-4"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Modal Header */}
+              <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+                <div className="flex items-center gap-2">
+                  {isVarMode ? (
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-indigo-50 dark:bg-indigo-950/80 text-indigo-600 dark:text-indigo-300 border border-indigo-100 dark:border-indigo-900/50">
+                      <Sparkles className="w-4 h-4 text-indigo-500 shrink-0" />
+                      <span>Sửa Biến Dữ Liệu: <b className="text-indigo-700 dark:text-indigo-200">{linkedVar}</b></span>
+                    </span>
+                  ) : (
+                    <span className="text-sm font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                      <Pencil className="w-4 h-4 text-indigo-500 shrink-0" />
+                      <span>Sửa Nội Dung Văn Bản</span>
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {isVarMode && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const staticVal = substituteVariables(editingEl.content, sampleDataRow);
+                        onUpdateElement({ ...editingEl, content: staticVal });
+                      }}
+                      className="text-xs font-semibold text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-300 transition-colors cursor-pointer"
+                      title="Chuyển biến thành văn bản tĩnh"
+                    >
+                      Tĩnh hóa
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setEditingTextId(null)}
+                    className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg cursor-pointer transition-colors"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Text Area */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5">
+                  {isVarMode ? `Nội dung giá trị thực tế cho {{${linkedVar}}}:` : 'Nội dung văn bản hiển thị:'}
+                </label>
+                <textarea
+                  autoFocus
+                  rows={4}
+                  value={currentValue}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (isVarMode && linkedVar && onUpdateDatasetValue) {
+                      onUpdateDatasetValue(linkedVar, val);
+                    } else {
+                      onUpdateElement({
+                        ...editingEl,
+                        content: val,
+                      });
+                    }
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                      e.preventDefault();
+                      setEditingTextId(null);
+                    } else if (e.key === 'Escape') {
+                      setEditingTextId(null);
+                    }
+                  }}
+                  className="w-full bg-slate-50 dark:bg-slate-800/90 text-slate-900 dark:text-slate-100 p-3 rounded-xl border border-slate-200 dark:border-slate-700 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none text-sm font-medium leading-relaxed resize-y transition-all"
+                  placeholder="Nhập nội dung văn bản..."
+                  style={{
+                    fontFamily: editingEl.fontFamily && editingEl.fontFamily !== 'sans-serif' ? editingEl.fontFamily : 'Inter, system-ui, sans-serif',
+                    fontWeight: editingEl.fontWeight || 'normal',
+                    fontStyle: editingEl.fontStyle || 'normal',
+                  }}
+                />
+              </div>
+
+              {/* Modal Footer */}
+              <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800 select-none">
+                <span className="text-xs text-slate-400 dark:text-slate-500 font-medium">
+                  Ctrl + Enter để lưu
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditingTextId(null)}
+                    className="px-3.5 py-1.5 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors cursor-pointer"
+                  >
+                    Hủy
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditingTextId(null)}
+                    className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs cursor-pointer flex items-center gap-1.5 shadow-md shadow-indigo-500/20 transition-all"
+                  >
+                    <Check className="w-4 h-4" />
+                    <span>Lưu Dữ Liệu</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 };

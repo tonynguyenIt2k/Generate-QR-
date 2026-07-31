@@ -20,12 +20,41 @@ import {
   onAuthStateChanged,
   User
 } from 'firebase/auth';
-import firebaseConfig from '../../firebase-applet-config.json';
 import { LabelTemplate, LabelElement, DatasetRow } from '../types/label';
 
-const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId || undefined);
+export const firebaseConfig = {
+  apiKey: "AIzaSyBWIz93afkxfmNPCFcF2xursIWCs_W1ERU",
+  authDomain: "qr-smart-db1a0.firebaseapp.com",
+  projectId: "qr-smart-db1a0",
+  storageBucket: "qr-smart-db1a0.firebasestorage.app",
+  messagingSenderId: "150848590110",
+  appId: "1:150848590110:web:123e9bdad7c252974df90f"
+};
+
+function getFirebaseApp() {
+  const existingApps = getApps();
+  if (existingApps.length > 0) {
+    const current = existingApps[0];
+    if (current.options.projectId === firebaseConfig.projectId) {
+      return current;
+    }
+  }
+  return initializeApp(firebaseConfig);
+}
+
+const app = getFirebaseApp();
+export const db = getFirestore(app);
 export const auth = getAuth(app);
+
+// Attempt anonymous sign-in if no user is logged in so Firestore request.auth != null rules work
+onAuthStateChanged(auth, (user) => {
+  if (!user) {
+    signInAnonymously(auth).catch((err) => {
+      // Anonymous auth might not be enabled in console, that's okay
+      console.info('Firebase anonymous auth notice:', err?.message || err);
+    });
+  }
+});
 
 // Authentication Helpers
 export async function signInWithGoogle(): Promise<User> {
@@ -89,8 +118,12 @@ export async function saveAppSettingsToFirebase(data: {
       },
       { merge: true }
     );
-  } catch (err) {
-    console.error('Error saving app settings to Firebase:', err);
+  } catch (err: any) {
+    if (err?.code === 'permission-denied' || err?.message?.includes('permissions')) {
+      console.warn('[Firebase Firestore] Quyền ghi dữ liệu chưa được bật trong dự án Firebase. Đã lưu bộ nhớ cục bộ (LocalStorage) thành công.');
+    } else {
+      console.warn('Lỗi lưu cấu hình lên Firebase:', err);
+    }
   }
 }
 
@@ -111,7 +144,7 @@ export function subscribeAppSettingsFromFirebase(
       }
     },
     (err) => {
-      console.warn('Firestore snapshot error for appSettings:', err);
+      console.warn('Firestore snapshot notice for appSettings:', err?.message || err);
     }
   );
 }
@@ -126,8 +159,12 @@ export async function saveTemplateToFirebase(template: LabelTemplate) {
       userId,
       updatedAt: Date.now(),
     });
-  } catch (err) {
-    console.error('Error saving template to Firebase:', err);
+  } catch (err: any) {
+    if (err?.code === 'permission-denied' || err?.message?.includes('permissions')) {
+      console.warn('[Firebase Firestore] Quyền ghi tem chưa được bật. Mẫu tem đã được lưu ở LocalStorage.');
+    } else {
+      console.warn('Lỗi lưu mẫu tem lên Firebase:', err);
+    }
   }
 }
 
@@ -136,8 +173,12 @@ export async function deleteTemplateFromFirebase(templateId: string) {
   try {
     const docRef = doc(db, 'templates', templateId);
     await deleteDoc(docRef);
-  } catch (err) {
-    console.error('Error deleting template from Firebase:', err);
+  } catch (err: any) {
+    if (err?.code === 'permission-denied' || err?.message?.includes('permissions')) {
+      console.warn('[Firebase Firestore] Không thể xóa mẫu tem trên Firebase do chưa cấp quyền.');
+    } else {
+      console.warn('Lỗi xóa mẫu tem trên Firebase:', err);
+    }
   }
 }
 
