@@ -91,38 +91,74 @@ export interface StoredAppSettings {
   updatedAt: number;
 }
 
-// Get setting document reference based on current user
+function getDeviceId(): string {
+  try {
+    let id = localStorage.getItem('qr_label_device_id');
+    if (!id) {
+      id = 'dev_' + Math.random().toString(36).substring(2, 11) + '_' + Date.now().toString(36);
+      localStorage.setItem('qr_label_device_id', id);
+    }
+    return id;
+  } catch {
+    return 'dev_fallback';
+  }
+}
+
+// Get setting document reference based on current user or unique device
 function getSettingsDocRef() {
   const user = auth.currentUser;
   if (user && !user.isAnonymous) {
     return doc(db, 'userSettings', user.uid);
   }
-  return doc(db, 'appSettings', 'global');
+  const deviceId = getDeviceId();
+  return doc(db, 'guestSettings', deviceId);
 }
 
-// Save app state to Firestore (isolated per user if logged in)
+// Write backoff tracking to prevent Firestore resource-exhausted spam
+let firestoreBackoffUntil = 0;
+let lastWriteTime = 0;
+
+// Save app state to Firestore (isolated per user or device ID)
 export async function saveAppSettingsToFirebase(data: {
   currentTemplate: LabelTemplate;
   elements: LabelElement[];
   dataset: DatasetRow[];
   darkMode?: boolean;
 }) {
+  const now = Date.now();
+  // If in backoff period or less than 1.5s since last write, skip cloud write (LocalStorage is already up to date)
+  if (now < firestoreBackoffUntil || now - lastWriteTime < 1500) {
+    return;
+  }
+
   try {
+    lastWriteTime = now;
     const docRef = getSettingsDocRef();
     await setDoc(
       docRef,
       {
         ...data,
-        updatedAt: Date.now(),
-        userId: auth.currentUser?.uid || 'guest',
+        updatedAt: now,
+        userId: auth.currentUser?.uid || getDeviceId(),
       },
       { merge: true }
     );
+    // Reset backoff on success
+    firestoreBackoffUntil = 0;
   } catch (err: any) {
-    if (err?.code === 'permission-denied' || err?.message?.includes('permissions')) {
-      console.warn('[Firebase Firestore] Quyền ghi dữ liệu chưa được bật trong dự án Firebase. Đã lưu bộ nhớ cục bộ (LocalStorage) thành công.');
+    const isResourceExhausted =
+      err?.code === 'resource-exhausted' ||
+      err?.message?.includes('resource-exhausted') ||
+      err?.message?.includes('maximum bandwidth');
+
+    if (isResourceExhausted) {
+      // Backoff for 30 seconds if quota reached
+      firestoreBackoffUntil = Date.now() + 30000;
+      console.info('[Firebase Firestore] Băng thông Firebase đang bận. Ứng dụng tự động lưu trữ tức thì bằng LocalStorage.');
+    } else if (err?.code === 'permission-denied' || err?.message?.includes('permissions')) {
+      console.warn('[Firebase Firestore] Quyền ghi dữ liệu chưa được cấp. Đã lưu bộ nhớ cục bộ (LocalStorage) thành công.');
     } else {
-      console.warn('Lỗi lưu cấu hình lên Firebase:', err);
+      console.warn('Lưu cấu hình lên Firebase:', err?.message || err);
     }
   }
 }

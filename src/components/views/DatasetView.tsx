@@ -21,8 +21,11 @@ import {
   X,
   AlertCircle,
   Save,
+  Scan,
+  Camera,
+  Sparkles,
 } from 'lucide-react';
-import { DatasetRow, LabelElement } from '../../types/label';
+import { DatasetRow, LabelElement, LabelTemplate } from '../../types/label';
 import { generateSamplePhoneShopExcel } from '../../utils/excelHelper';
 import {
   ConfirmModal,
@@ -30,12 +33,14 @@ import {
   ConfirmState,
   ToastState,
 } from '../common/CustomAlert';
+import { TextScannerModal, ScanTargetInfo } from '../scanner/TextScannerModal';
 
 interface DatasetViewProps {
   dataset: DatasetRow[];
   onSetDataset: React.Dispatch<React.SetStateAction<DatasetRow[]>>;
   onOpenImportModal: () => void;
   elements?: LabelElement[];
+  template?: LabelTemplate;
 }
 
 export const DatasetView: React.FC<DatasetViewProps> = ({
@@ -43,12 +48,40 @@ export const DatasetView: React.FC<DatasetViewProps> = ({
   onSetDataset,
   onOpenImportModal,
   elements,
+  template,
 }) => {
   // Extract all existing keys across dataset
   const allKeys = Array.from(
     new Set(dataset.flatMap((row) => Object.keys(row)))
   );
 
+  // Detect mobile device
+  const [isMobile, setIsMobile] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      return window.innerWidth < 768;
+    }
+    return false;
+  });
+
+  const [viewMode, setViewMode] = useState<'table' | 'cards'>(() => {
+    if (typeof window !== 'undefined' && window.innerWidth < 768) {
+      return 'cards';
+    }
+    return 'table';
+  });
+
+  useEffect(() => {
+    const checkMobile = () => {
+      const mobile = window.innerWidth < 768;
+      setIsMobile(mobile);
+      if (mobile) {
+        setViewMode('cards');
+      }
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
   const [columnOrder, setColumnOrder] = useState<string[]>([]);
   const [hiddenColumns, setHiddenColumns] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
@@ -57,6 +90,204 @@ export const DatasetView: React.FC<DatasetViewProps> = ({
   const [editingColName, setEditingColName] = useState<string | null>(null);
   const [newColTitle, setNewColTitle] = useState('');
   const [copiedCol, setCopiedCol] = useState<string | null>(null);
+
+  // Scanner & OCR State
+  const [scannerTarget, setScannerTarget] = useState<ScanTargetInfo | null>(null);
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
+
+  const handleOpenScanModal = (
+    rowIndex: number,
+    fieldName: string,
+    currentValue: string,
+    allRowData: DatasetRow
+  ) => {
+    setScannerTarget({
+      rowIndex,
+      fieldName,
+      currentValue,
+      allRowData,
+      availableColumns: columnOrder,
+    });
+    setIsScannerOpen(true);
+  };
+
+  const handleApplyScannedValue = (rowIndex: number, fieldName: string, value: string) => {
+    handleCellChange(rowIndex, fieldName, value);
+    showToast('Đã quét thành công!', `Đã điền "${value}" vào cột ${fieldName} (SP #${rowIndex + 1}).`, 'success');
+  };
+
+  // Helper to map scanned keys to column names intelligently
+  const findMatchingColumn = (key: string, columns: string[]): string | undefined => {
+    const k = key.toLowerCase().trim();
+
+    // Direct exact match
+    const exact = columns.find((c) => c.toLowerCase().trim() === k);
+    if (exact) return exact;
+
+    // Model / Product Name mappings
+    if (
+      ['model', 'ten_sp', 'tên sp', 'tên máy', 'tên thiết bị', 'tên hàng', 'tên vật tư', 'vật tư', 'vattu', 'sản phẩm', 'tenhang', 'mặt hàng', 'name', 'product'].some(
+        (p) => k === p || k.includes(p)
+      )
+    ) {
+      const match = columns.find((c) => {
+        const cl = c.toLowerCase();
+        return cl.includes('ten') || cl.includes('model') || cl.includes('máy') || cl.includes('hàng') || cl.includes('vật tư') || cl.includes('name') || cl.includes('sp');
+      });
+      if (match) return match;
+    }
+
+    // IMEI 1 & Serial / IMEI mappings
+    if (
+      ['imei', 'imei 1', 'imei_1', 'imei1', 'mã imei', 'imei/serial', 'imei / serial', 'imei_serial', 'serial/imei', 'mã máy'].some(
+        (p) => k === p || k.includes(p)
+      )
+    ) {
+      const match = columns.find((c) => {
+        const cl = c.toLowerCase();
+        return ((cl.includes('imei') || cl.includes('serial')) && !cl.includes('2')) || cl.includes('mã') || cl.includes('sn');
+      });
+      if (match) return match;
+    }
+
+    // IMEI 2 mappings
+    if (['imei 2', 'imei_2', 'imei2', 'imei_phụ'].some((p) => k === p || k.includes(p))) {
+      const match = columns.find((c) => {
+        const cl = c.toLowerCase();
+        return cl.includes('imei') && cl.includes('2');
+      });
+      if (match) return match;
+    }
+
+    // Serial mappings
+    if (['serial', 's/n', 'sn', 'số serial', 'imei/serial', 'imei / serial'].some((p) => k === p || k.includes(p))) {
+      const match = columns.find((c) => {
+        const cl = c.toLowerCase();
+        return cl.includes('serial') || cl.includes('imei') || cl === 'sn' || cl === 's/n';
+      });
+      if (match) return match;
+    }
+
+    // Storage mappings
+    if (
+      ['dungluong', 'dung lượng', 'bộ nhớ', 'storage', 'ram', 'rom', 'ram_rom'].some(
+        (p) => k === p || k.includes(p)
+      )
+    ) {
+      const match = columns.find((c) => {
+        const cl = c.toLowerCase();
+        return cl.includes('dung') || cl.includes('lượng') || cl.includes('bộ nhớ') || cl.includes('storage') || cl.includes('ram');
+      });
+      if (match) return match;
+    }
+
+    // Color mappings
+    if (['mausac', 'màu sắc', 'màu', 'color'].some((p) => k === p || k.includes(p))) {
+      const match = columns.find((c) => {
+        const cl = c.toLowerCase();
+        return cl.includes('mau') || cl.includes('màu') || cl.includes('color');
+      });
+      if (match) return match;
+    }
+
+    // Price mappings
+    if (['gia', 'giá', 'don_gia', 'đơn giá', 'price'].some((p) => k === p || k.includes(p))) {
+      const match = columns.find((c) => {
+        const cl = c.toLowerCase();
+        return cl.includes('gia') || cl.includes('giá') || cl.includes('price');
+      });
+      if (match) return match;
+    }
+
+    // Generic partial match
+    return columns.find((c) => c.toLowerCase().includes(k) || k.includes(c.toLowerCase()));
+  };
+
+  const handleApplyMultiScannedFields = (rowIndex: number, fields: Record<string, string>) => {
+    onSetDataset((prev) => {
+      const next = [...prev];
+      if (rowIndex < 0 || rowIndex >= next.length) return prev;
+      const updatedRow = { ...next[rowIndex] };
+
+      Object.entries(fields).forEach(([k, v]) => {
+        if (!v || !v.trim()) return;
+        const targetCol = findMatchingColumn(k, columnOrder);
+        if (targetCol) {
+          updatedRow[targetCol] = v.trim();
+        } else if (columnOrder.includes(k)) {
+          updatedRow[k] = v.trim();
+        }
+      });
+
+      next[rowIndex] = updatedRow;
+      return next;
+    });
+
+    const modelName = fields['Model'] || fields['Ten_SP'] || '';
+    const imei = fields['IMEI'] || fields['IMEI 1'] || '';
+    const summary = [modelName, imei].filter(Boolean).join(' | ');
+
+    showToast(
+      'Ghép cặp Tên máy & IMEI thành công!',
+      `Đã cập nhật [${summary || 'thông số'}] vào dòng SP #${rowIndex + 1}.`,
+      'success'
+    );
+  };
+
+  const handleAddNewRowWithFields = (fields: Record<string, string>) => {
+    const newRow: DatasetRow = {};
+    columnOrder.forEach((col) => {
+      newRow[col] = '';
+    });
+
+    Object.entries(fields).forEach(([k, v]) => {
+      if (!v || !v.trim()) return;
+      const targetCol = findMatchingColumn(k, columnOrder);
+      if (targetCol) {
+        newRow[targetCol] = v.trim();
+      } else if (columnOrder.includes(k)) {
+        newRow[k] = v.trim();
+      }
+    });
+
+    onSetDataset((prev) => [...prev, newRow]);
+    const modelName = fields['Model'] || fields['Ten_SP'] || '';
+    const imei = fields['IMEI'] || fields['IMEI 1'] || '';
+    showToast(
+      'Đã tạo dòng sản phẩm mới!',
+      `Đã thêm [${modelName || 'Thiết bị mới'}${imei ? ` - ${imei}` : ''}] vào danh sách.`,
+      'success'
+    );
+  };
+
+  const handleAddMultipleRowsWithFields = (products: Array<Record<string, string>>) => {
+    if (!products || products.length === 0) return;
+
+    const newRows: DatasetRow[] = products.map((fields) => {
+      const newRow: DatasetRow = {};
+      columnOrder.forEach((col) => {
+        newRow[col] = '';
+      });
+
+      Object.entries(fields).forEach(([k, v]) => {
+        if (!v || !v.trim()) return;
+        const targetCol = findMatchingColumn(k, columnOrder);
+        if (targetCol) {
+          newRow[targetCol] = v.trim();
+        } else if (columnOrder.includes(k)) {
+          newRow[k] = v.trim();
+        }
+      });
+      return newRow;
+    });
+
+    onSetDataset((prev) => [...prev, ...newRows]);
+    showToast(
+      'Thêm hàng loạt thành công!',
+      `Đã tạo mới ${newRows.length} sản phẩm từ phiếu quét vào bảng Excel.`,
+      'success'
+    );
+  };
 
   // Custom Confirm & Toast Alert States
   const [confirmState, setConfirmState] = useState<ConfirmState>({
@@ -343,7 +574,7 @@ export const DatasetView: React.FC<DatasetViewProps> = ({
             <span>Tải File Excel Ngay</span>
           </button>
           <button
-            onClick={() => generateSamplePhoneShopExcel(elements)}
+            onClick={() => generateSamplePhoneShopExcel(elements, template)}
             className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 font-bold rounded-xl text-xs hover:bg-slate-50 transition-colors cursor-pointer"
           >
             <Download className="w-4 h-4 text-emerald-600" />
@@ -357,28 +588,62 @@ export const DatasetView: React.FC<DatasetViewProps> = ({
   return (
     <div className="flex-1 bg-slate-100 dark:bg-slate-950 flex flex-col overflow-hidden">
       {/* Top Bar */}
-      <div className="p-3 sm:p-4 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-2 sm:gap-4 flex-wrap">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-blue-50 dark:bg-blue-900/30 flex items-center justify-center text-blue-600 dark:text-blue-400 shrink-0">
-            <Database className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" />
+      <div className="p-2 sm:p-4 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2 shrink-0">
+        <div className="flex items-center justify-between min-w-0 w-full sm:w-auto">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="w-8 h-8 rounded-xl bg-blue-50 dark:bg-blue-900/30 flex items-center justify-center text-blue-600 dark:text-blue-400 shrink-0">
+              <Database className="w-4 h-4 shrink-0" />
+            </div>
+            <div className="min-w-0">
+              <h2 className="text-xs sm:text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5 truncate">
+                <span className="truncate">Sản Phẩm Excel</span>
+                <span className="px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300 text-[10px] font-mono shrink-0 whitespace-nowrap">
+                  {dataset.length} sp x {columnOrder.length} cột
+                </span>
+              </h2>
+            </div>
           </div>
-          <div className="min-w-0">
-            <h2 className="text-xs sm:text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2 truncate">
-              <span className="truncate">Bảng Dữ Liệu Sản Phẩm</span>
-              <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300 text-[10px] sm:text-[11px] font-mono shrink-0 whitespace-nowrap">
-                {dataset.length} hàng x {columnOrder.length} cột
-              </span>
-            </h2>
-            <p className="text-[10px] sm:text-[11px] text-slate-500 dark:text-slate-400 truncate">
-              Chỉnh sửa thông tin, bật/tắt cột và chèn mã biến số
-            </p>
-          </div>
+
+          {/* View Mode: On mobile always show Card badge; On desktop allow toggle */}
+          {isMobile ? (
+            <div className="flex items-center px-2 py-1 rounded-lg bg-blue-50 dark:bg-blue-950/80 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 text-[11px] font-bold shrink-0">
+              Dạng Thẻ
+            </div>
+          ) : (
+            <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg border border-slate-200 dark:border-slate-700 shrink-0">
+              <button
+                type="button"
+                onClick={() => setViewMode('table')}
+                className={`px-2 py-1 rounded-md text-[11px] font-bold transition-all cursor-pointer ${
+                  viewMode === 'table'
+                    ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs'
+                    : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+                }`}
+                title="Chế độ Xem Bảng Grid"
+              >
+                Bảng Grid
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('cards')}
+                className={`px-2 py-1 rounded-md text-[11px] font-bold transition-all cursor-pointer ${
+                  viewMode === 'cards'
+                    ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs'
+                    : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+                }`}
+                title="Chế độ Xem Dạng Thẻ"
+              >
+                Dạng Thẻ
+              </button>
+            </div>
+          )}
         </div>
 
-        <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap shrink-0">
+        {/* Action Controls Strip */}
+        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 touch-pan-x min-w-0 w-full shrink-0">
           {/* Quick Search */}
-          <div className="relative w-36 sm:w-44 shrink-0">
-            <Search className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2 shrink-0" />
+          <div className="relative w-28 sm:w-40 shrink-0">
+            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2 shrink-0" />
             <input
               type="text"
               placeholder="Tìm kiếm..."
@@ -396,62 +661,81 @@ export const DatasetView: React.FC<DatasetViewProps> = ({
             )}
           </div>
 
-          {/* Column Customization Modal Opener */}
+          {/* Quick Scan Button */}
+          <button
+            onClick={() => {
+              if (dataset.length === 0) {
+                handleAddRow();
+                setTimeout(() => {
+                  handleOpenScanModal(0, activeColumns[0] || 'IMEI', '', {});
+                }, 50);
+              } else {
+                handleOpenScanModal(0, activeColumns[0] || 'IMEI', String(dataset[0]?.[activeColumns[0]] ?? ''), dataset[0]);
+              }
+            }}
+            className="flex items-center gap-1 px-2.5 py-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-xs font-bold rounded-xl shadow-sm shadow-blue-500/20 cursor-pointer whitespace-nowrap shrink-0 active:scale-95"
+            title="Mở Camera quét mã vạch / IMEI / Nhận diện văn bản OCR"
+          >
+            <Scan className="w-3.5 h-3.5 shrink-0" />
+            <span className="whitespace-nowrap text-[11px] sm:text-xs">Quét Scan OCR</span>
+          </button>
+
+          {/* Column Customization Opener */}
           <button
             onClick={() => setIsColumnModalOpen(true)}
-            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 dark:hover:bg-indigo-900 text-xs font-semibold rounded-xl transition-all cursor-pointer whitespace-nowrap shrink-0"
+            className="flex items-center gap-1 px-2.5 py-1.5 bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 text-xs font-semibold rounded-xl transition-all cursor-pointer whitespace-nowrap shrink-0"
           >
-            <SlidersHorizontal className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
-            <span className="whitespace-nowrap">Tùy Chọn Cột ({activeColumns.length}/{columnOrder.length})</span>
+            <SlidersHorizontal className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400 shrink-0" />
+            <span className="whitespace-nowrap text-[11px] sm:text-xs">Cột ({activeColumns.length}/{columnOrder.length})</span>
           </button>
 
           {/* Add Row */}
           <button
             onClick={handleAddRow}
-            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-xs cursor-pointer whitespace-nowrap shrink-0"
+            className="flex items-center gap-1 px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-xs cursor-pointer whitespace-nowrap shrink-0 active:scale-95"
           >
-            <Plus className="w-4 h-4 shrink-0" />
-            <span className="whitespace-nowrap">Thêm Dòng</span>
+            <Plus className="w-3.5 h-3.5 shrink-0" />
+            <span className="whitespace-nowrap text-[11px] sm:text-xs">Thêm SP</span>
           </button>
 
           {/* Import Excel */}
           <button
             onClick={onOpenImportModal}
-            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold rounded-xl cursor-pointer whitespace-nowrap shrink-0"
+            className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold rounded-xl cursor-pointer whitespace-nowrap shrink-0"
           >
-            <FileSpreadsheet className="w-4 h-4 text-emerald-600 shrink-0" />
-            <span className="whitespace-nowrap">Nạp Excel</span>
+            <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+            <span className="whitespace-nowrap text-[11px] sm:text-xs">Nạp Excel</span>
           </button>
 
           {/* Save Dataset Button */}
           <button
             onClick={handleSaveDataset}
-            className="flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-md shadow-emerald-500/20 cursor-pointer transition-all whitespace-nowrap shrink-0"
+            className="flex items-center gap-1 px-2.5 sm:px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-md shadow-emerald-500/20 cursor-pointer transition-all whitespace-nowrap shrink-0 active:scale-95"
             title="Lưu dữ liệu Excel lên Cloud"
           >
-            <Save className="w-4 h-4 shrink-0" />
-            <span className="whitespace-nowrap">Lưu Dữ Liệu Excel</span>
+            <Save className="w-3.5 h-3.5 shrink-0" />
+            <span className="whitespace-nowrap text-[11px] sm:text-xs">Lưu Dữ Liệu</span>
           </button>
         </div>
       </div>
 
       {/* Batch Action Strip */}
       {selectedRows.size > 0 && (
-        <div className="bg-blue-50 dark:bg-blue-950/60 px-6 py-2 border-b border-blue-200 dark:border-blue-900 flex items-center justify-between text-xs text-blue-900 dark:text-blue-200">
-          <span className="font-semibold">
+        <div className="bg-blue-50 dark:bg-blue-950/60 px-3 sm:px-6 py-1.5 border-b border-blue-200 dark:border-blue-900 flex items-center justify-between text-xs text-blue-900 dark:text-blue-200">
+          <span className="font-semibold text-[11px] sm:text-xs">
             Đã chọn <b>{selectedRows.size}</b> sản phẩm
           </span>
           <div className="flex items-center gap-2">
             <button
               onClick={handleDeleteSelectedRows}
-              className="flex items-center gap-1 px-2.5 py-1 bg-red-600 text-white hover:bg-red-700 rounded-lg font-bold text-xs cursor-pointer"
+              className="flex items-center gap-1 px-2 py-1 bg-red-600 text-white hover:bg-red-700 rounded-lg font-bold text-[11px] cursor-pointer"
             >
               <Trash2 className="w-3.5 h-3.5" />
-              <span>Xóa Các Dòng Đã Chọn</span>
+              <span>Xóa Đã Chọn</span>
             </button>
             <button
               onClick={() => setSelectedRows(new Set())}
-              className="px-2.5 py-1 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg text-xs cursor-pointer"
+              className="px-2 py-1 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg text-[11px] cursor-pointer"
             >
               Bỏ chọn
             </button>
@@ -459,134 +743,262 @@ export const DatasetView: React.FC<DatasetViewProps> = ({
         </div>
       )}
 
-      {/* Main Table View */}
-      <div className="flex-1 overflow-auto p-6">
-        <div className="border border-slate-200 dark:border-slate-800 rounded-2xl bg-white dark:bg-slate-900 shadow-xs overflow-hidden">
-          <table className="w-full text-left border-collapse text-xs">
-            <thead className="bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-200 border-b border-slate-200 dark:border-slate-800 font-bold sticky top-0 z-10">
-              <tr>
-                {/* Checkbox Select All */}
-                <th className="p-3 w-10 text-center border-r border-slate-200 dark:border-slate-800">
-                  <input
-                    type="checkbox"
-                    checked={isAllSelected}
-                    onChange={toggleSelectAll}
-                    className="rounded text-blue-600 focus:ring-blue-500 cursor-pointer"
-                  />
-                </th>
-
-                <th className="p-3 w-12 text-center border-r border-slate-200 dark:border-slate-800 text-slate-400">
-                  #
-                </th>
-
-                {/* Visible Column Headers */}
-                {activeColumns.map((header, colIndex) => (
-                  <th
-                    key={header}
-                    className="p-3 font-mono border-r border-slate-200 dark:border-slate-800 group relative hover:bg-slate-200/60 dark:hover:bg-slate-700/60 transition-colors"
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-1.5 overflow-hidden">
-                        <span className="text-emerald-700 dark:text-emerald-300 font-bold truncate">
-                          {header}
-                        </span>
-                        {copiedCol === header && (
-                          <span className="text-[10px] text-blue-600 font-sans font-bold bg-blue-50 px-1 rounded">
-                            Đã chép!
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Header Quick Action Dropdown Icons */}
-                      <div className="opacity-0 group-hover:opacity-100 flex items-center gap-1 transition-opacity shrink-0">
-                        <button
-                          onClick={() => copyVariableTag(header)}
-                          className="p-1 text-slate-400 hover:text-blue-600 rounded cursor-pointer"
-                          title="Sao chép mã {{mã biến}}"
-                        >
-                          <Copy className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => toggleColumnVisibility(header)}
-                          className="p-1 text-slate-400 hover:text-amber-600 rounded cursor-pointer"
-                          title="Ẩn cột này"
-                        >
-                          <EyeOff className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteColumn(header)}
-                          className="p-1 text-slate-400 hover:text-red-600 rounded cursor-pointer"
-                          title="Xóa cột này khỏi toàn bộ dữ liệu"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
-                  </th>
-                ))}
-
-                <th className="p-3 w-16 text-center">Xóa</th>
-              </tr>
-            </thead>
-
-            <tbody className="divide-y divide-slate-200 dark:divide-slate-800 font-mono text-slate-800 dark:text-slate-200">
-              {filteredDataset.map((row, rowIndex) => {
-                const isSelected = selectedRows.has(rowIndex);
-                return (
-                  <tr
-                    key={rowIndex}
-                    className={`transition-colors ${
-                      isSelected
-                        ? 'bg-blue-50/70 dark:bg-blue-950/40'
-                        : 'hover:bg-slate-50 dark:hover:bg-slate-800/40'
-                    }`}
-                  >
-                    {/* Select Row Checkbox */}
-                    <td className="p-3 text-center border-r border-slate-200 dark:border-slate-800">
+      {/* Main Content Area */}
+      <div className="flex-1 overflow-auto p-2 sm:p-4 md:p-6 pb-28">
+        {viewMode === 'cards' || isMobile ? (
+          /* MOBILE CARD VIEW: Clean touch cards for mobile phones */
+          <div className="space-y-3 pb-24">
+            {filteredDataset.map((row, rowIndex) => {
+              const isSelected = selectedRows.has(rowIndex);
+              return (
+                <div
+                  key={rowIndex}
+                  className={`p-3.5 rounded-2xl border transition-all ${
+                    isSelected
+                      ? 'bg-blue-50/90 dark:bg-blue-950/80 border-blue-400 dark:border-blue-600 shadow-md'
+                      : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs'
+                  }`}
+                >
+                  <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-100 dark:border-slate-800">
+                    <div className="flex items-center gap-2">
                       <input
                         type="checkbox"
                         checked={isSelected}
                         onChange={() => toggleSelectRow(rowIndex)}
-                        className="rounded text-blue-600 focus:ring-blue-500 cursor-pointer"
+                        className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 cursor-pointer"
                       />
-                    </td>
+                      <span className="text-xs font-bold text-slate-500 font-mono">
+                        Sản Phẩm #{rowIndex + 1}
+                      </span>
+                    </div>
 
-                    <td className="p-3 text-center text-slate-400 font-bold border-r border-slate-200 dark:border-slate-800">
-                      {rowIndex + 1}
-                    </td>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleOpenScanModal(
+                            rowIndex,
+                            activeColumns[0] || 'IMEI',
+                            String(row[activeColumns[0]] ?? ''),
+                            row
+                          )
+                        }
+                        className="p-1 px-2 text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-100 rounded-lg cursor-pointer flex items-center gap-1 text-[11px] font-bold border border-blue-200 dark:border-blue-800 shadow-2xs"
+                        title="Quét ảnh tem hoặc vỏ hộp để nhận diện tự động"
+                      >
+                        <Scan className="w-3.5 h-3.5" />
+                        <span>Quét Hộp/Tem</span>
+                      </button>
 
-                    {/* Visible Column Cells */}
-                    {activeColumns.map((header) => {
-                      const cellVal = String(row[header] ?? '');
-                      const hasMultiline = cellVal.includes('\n');
-                      return (
-                        <td key={header} className="p-1 border-r border-slate-200 dark:border-slate-800 vertical-top">
-                          <textarea
-                            rows={hasMultiline ? Math.min(4, cellVal.split('\n').length) : 1}
-                            value={cellVal}
-                            onChange={(e) => handleCellChange(rowIndex, header, e.target.value)}
-                            className="w-full px-2 py-1 rounded bg-transparent focus:bg-white dark:focus:bg-slate-800 border border-transparent focus:border-blue-500 text-xs font-mono resize-y leading-snug min-h-[28px]"
-                            placeholder="..."
-                          />
-                        </td>
-                      );
-                    })}
-
-                    <td className="p-3 text-center">
                       <button
                         onClick={() => handleDeleteRow(rowIndex)}
-                        className="p-1 text-slate-400 hover:text-red-600 rounded cursor-pointer"
-                        title="Xóa dòng này"
+                        className="p-1.5 text-red-500 hover:text-red-700 bg-red-50 dark:bg-red-950/40 rounded-lg cursor-pointer flex items-center gap-1 text-[11px] font-semibold"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Xóa</span>
                       </button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    {activeColumns.map((header) => {
+                      const cellVal = String(row[header] ?? '');
+                      return (
+                        <div key={header} className="space-y-1">
+                          <label className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 font-mono flex items-center justify-between">
+                            <span className="truncate mr-1">{header}</span>
+                            <div className="flex items-center gap-1 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => handleOpenScanModal(rowIndex, header, cellVal, row)}
+                                className="px-1.5 py-0.5 rounded-md bg-blue-50 dark:bg-blue-950/70 border border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/60 flex items-center gap-1 text-[10px] font-sans font-bold cursor-pointer transition-colors shadow-2xs active:scale-95"
+                                title={`Quét Camera / Nhận diện văn bản OCR cho ${header}`}
+                              >
+                                <Scan className="w-3 h-3" />
+                                <span>Scan</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => copyVariableTag(header)}
+                                className="text-slate-400 hover:text-blue-500 p-0.5"
+                                title="Sao chép biến"
+                              >
+                                <Copy className="w-3 h-3" />
+                              </button>
+                            </div>
+                          </label>
+                          <div className="relative flex items-center">
+                            <textarea
+                              rows={Math.max(1, Math.min(4, Math.ceil((cellVal.length || 1) / 32)))}
+                              value={cellVal}
+                              onChange={(e) => handleCellChange(rowIndex, header, e.target.value)}
+                              placeholder={`Nhập ${header}...`}
+                              className="w-full px-2.5 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-mono text-slate-900 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-900 focus:border-blue-500 focus:outline-none pr-8"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleOpenScanModal(rowIndex, header, cellVal, row)}
+                              className="absolute right-2 top-2 p-1 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 rounded cursor-pointer"
+                              title={`Bấm để quét mã / chụp ảnh nhận diện cho ${header}`}
+                            >
+                              <Camera className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          /* TABLE GRID VIEW */
+          <div className="border border-slate-200 dark:border-slate-800 rounded-2xl bg-white dark:bg-slate-900 shadow-xs overflow-hidden">
+            <table className="w-full text-left border-collapse text-xs min-w-[600px]">
+              <thead className="bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-200 border-b border-slate-200 dark:border-slate-800 font-bold sticky top-0 z-10">
+                <tr>
+                  {/* Checkbox Select All */}
+                  <th className="p-3 w-10 text-center border-r border-slate-200 dark:border-slate-800">
+                    <input
+                      type="checkbox"
+                      checked={isAllSelected}
+                      onChange={toggleSelectAll}
+                      className="rounded text-blue-600 focus:ring-blue-500 cursor-pointer"
+                    />
+                  </th>
+
+                  <th className="p-3 w-12 text-center border-r border-slate-200 dark:border-slate-800 text-slate-400">
+                    #
+                  </th>
+
+                  {/* Visible Column Headers */}
+                  {activeColumns.map((header) => (
+                    <th
+                      key={header}
+                      className="p-3 font-mono border-r border-slate-200 dark:border-slate-800 group relative hover:bg-slate-200/60 dark:hover:bg-slate-700/60 transition-colors"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5 overflow-hidden">
+                          <span className="text-emerald-700 dark:text-emerald-300 font-bold truncate">
+                            {header}
+                          </span>
+                          {copiedCol === header && (
+                            <span className="text-[10px] text-blue-600 font-sans font-bold bg-blue-50 px-1 rounded">
+                              Đã chép!
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Header Quick Action Dropdown Icons */}
+                        <div className="opacity-0 group-hover:opacity-100 flex items-center gap-1 transition-opacity shrink-0">
+                          <button
+                            onClick={() => copyVariableTag(header)}
+                            className="p-1 text-slate-400 hover:text-blue-600 rounded cursor-pointer"
+                            title="Sao chép mã {{mã biến}}"
+                          >
+                            <Copy className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => toggleColumnVisibility(header)}
+                            className="p-1 text-slate-400 hover:text-amber-600 rounded cursor-pointer"
+                            title="Ẩn cột này"
+                          >
+                            <EyeOff className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteColumn(header)}
+                            className="p-1 text-slate-400 hover:text-red-600 rounded cursor-pointer"
+                            title="Xóa cột này khỏi toàn bộ dữ liệu"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    </th>
+                  ))}
+
+                  <th className="p-3 w-16 text-center">Xóa</th>
+                </tr>
+              </thead>
+
+              <tbody className="divide-y divide-slate-200 dark:divide-slate-800 font-mono text-slate-800 dark:text-slate-200">
+                {filteredDataset.map((row, rowIndex) => {
+                  const isSelected = selectedRows.has(rowIndex);
+                  return (
+                    <tr
+                      key={rowIndex}
+                      className={`transition-colors ${
+                        isSelected
+                          ? 'bg-blue-50/70 dark:bg-blue-950/40'
+                          : 'hover:bg-slate-50 dark:hover:bg-slate-800/40'
+                      }`}
+                    >
+                      {/* Select Row Checkbox */}
+                      <td className="p-3 text-center border-r border-slate-200 dark:border-slate-800 vertical-top">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => toggleSelectRow(rowIndex)}
+                          className="rounded text-blue-600 focus:ring-blue-500 cursor-pointer mt-1"
+                        />
+                      </td>
+
+                      <td className="p-3 text-center text-slate-400 font-bold border-r border-slate-200 dark:border-slate-800 vertical-top">
+                        <span className="mt-1 block">{rowIndex + 1}</span>
+                      </td>
+
+                      {/* Visible Column Cells */}
+                      {activeColumns.map((header) => {
+                        const cellVal = String(row[header] ?? '');
+                        const lineCount = cellVal.split('\n').length;
+                        const charLength = cellVal.length;
+                        // Dynamically compute rows to avoid vertical text clipping
+                        const estimatedRows = Math.max(
+                          lineCount,
+                          Math.ceil(charLength / 22)
+                        );
+                        const computedRows = Math.max(1, Math.min(4, estimatedRows));
+
+                        return (
+                          <td key={header} className="p-1 border-r border-slate-200 dark:border-slate-800 align-top group/cell relative">
+                            <div className="relative flex items-center">
+                              <textarea
+                                rows={computedRows}
+                                value={cellVal}
+                                onChange={(e) => handleCellChange(rowIndex, header, e.target.value)}
+                                className="w-full px-2 py-1.5 rounded bg-transparent focus:bg-white dark:focus:bg-slate-800 border border-transparent focus:border-blue-500 text-xs font-mono resize-y leading-relaxed min-h-[36px] pr-6"
+                                placeholder="..."
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handleOpenScanModal(rowIndex, header, cellVal, row)}
+                                className="opacity-0 group-hover/cell:opacity-100 absolute right-1 top-1.5 p-1 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 bg-white/80 dark:bg-slate-900/80 rounded transition-opacity cursor-pointer shadow-2xs"
+                                title={`Quét scan cho ô ${header}`}
+                              >
+                                <Scan className="w-3 h-3" />
+                              </button>
+                            </div>
+                          </td>
+                        );
+                      })}
+
+                      <td className="p-3 text-center align-top">
+                        <button
+                          onClick={() => handleDeleteRow(rowIndex)}
+                          className="p-1 text-slate-400 hover:text-red-600 rounded cursor-pointer mt-0.5"
+                          title="Xóa dòng này"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* Column Customization Modal */}
@@ -786,6 +1198,17 @@ export const DatasetView: React.FC<DatasetViewProps> = ({
           </div>
         </div>
       )}
+
+      {/* Text & Barcode Scanner Modal */}
+      <TextScannerModal
+        isOpen={isScannerOpen}
+        onClose={() => setIsScannerOpen(false)}
+        target={scannerTarget}
+        onApplyValue={handleApplyScannedValue}
+        onApplyMultiFields={handleApplyMultiScannedFields}
+        onAddNewRowWithFields={handleAddNewRowWithFields}
+        onAddMultipleRowsWithFields={handleAddMultipleRowsWithFields}
+      />
 
       {/* Confirmation Dialog */}
       <ConfirmModal

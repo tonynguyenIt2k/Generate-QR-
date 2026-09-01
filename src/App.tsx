@@ -11,6 +11,7 @@ import {
 import { DEFAULT_TEMPLATES } from './utils/defaultTemplates';
 import { getAllTemplates, saveTemplate, saveAllTemplates } from './utils/templateStorage';
 import { AppBackupData } from './utils/backupStorage';
+import { adaptDatasetToTemplate, extractVariablesFromElements } from './utils/excelHelper';
 import {
   saveAppSettingsToFirebase,
   subscribeAppSettingsFromFirebase,
@@ -27,6 +28,7 @@ import { useHotkeys } from './hooks/useHotkeys';
 
 import { Header } from './components/layout/Header';
 import { Sidebar, MainTab } from './components/layout/Sidebar';
+import { FloatingDock } from './components/layout/FloatingDock';
 import { Toolbar } from './components/layout/Toolbar';
 
 import { ElementPalette } from './components/editor/ElementPalette';
@@ -36,15 +38,16 @@ import { LayerManager } from './components/editor/LayerManager';
 
 import { DataImportModal } from './components/import/DataImportModal';
 import { PrintModal } from './components/print/PrintModal';
-import { TemplateGalleryModal } from './components/templates/TemplateGalleryModal';
 import { ExportModal } from './components/export/ExportModal';
 import { UpdateManagerModal } from './components/common/UpdateManagerModal';
+import { PwaInstallModal } from './components/pwa/PwaInstallModal';
 
 import { GalleryView } from './components/views/GalleryView';
 import { DatasetView } from './components/views/DatasetView';
 import { SettingsView } from './components/views/SettingsView';
+import { TemplatesView } from './components/views/TemplatesView';
 import { generateBulkLabelsAsync } from './utils/bulkEngine';
-import { PanelLeft, PanelRight, Layers, QrCode, RefreshCw } from 'lucide-react';
+import { PanelLeft, PanelRight, Layers, QrCode, RefreshCw, Frame, Shapes, SlidersHorizontal } from 'lucide-react';
 
 export default function App() {
   const [darkMode, setDarkMode] = useState<boolean>(() => {
@@ -147,6 +150,23 @@ export default function App() {
   const [showGrid, setShowGrid] = useState(true);
   const [snapToGrid, setSnapToGrid] = useState(true);
   const [previewVariables, setPreviewVariables] = useState(true);
+
+  // Auto fit canvas zoom helper for small screens
+  const handleAutoFit = useCallback(() => {
+    const isMobile = window.innerWidth < 768;
+    const availW = window.innerWidth - (isMobile ? 32 : 320);
+    const labelPxAt1 = currentTemplate.widthMm * (96 / 25.4) + 28;
+    if (labelPxAt1 <= 0) return;
+    let target = availW / labelPxAt1;
+    target = Math.max(0.6, Math.min(3.5, Math.round(target * 20) / 20));
+    setZoom(target);
+  }, [currentTemplate.widthMm]);
+
+  useEffect(() => {
+    if (window.innerWidth < 768) {
+      handleAutoFit();
+    }
+  }, [currentTemplate.id, currentTemplate.widthMm, handleAutoFit]);
 
   // Resizable & Collapsible Sidebars State with LocalStorage Persistence
   const [leftPanelWidth, setLeftPanelWidth] = useState(() => {
@@ -263,50 +283,13 @@ export default function App() {
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
+          return adaptDatasetToTemplate(currentTemplate, parsed);
         }
       }
     } catch (e) {
       console.error('Error loading dataset from localStorage', e);
     }
-    return [
-      {
-        MaMay: 'IP15P-256-NT',
-        Model: 'iPhone 15 Pro Max',
-        DungLuong: '256GB',
-        MauSac: 'Titan Tự Nhiên',
-        IMEI: '356782091234561',
-        Serial: 'F2LXK982P01',
-        Gia: 28990000,
-        TenShop: 'MOBILE CITY',
-        BaoHanh: '12 Tháng',
-        MaKho: 'KHO-HN-01',
-      },
-      {
-        MaMay: 'IP15P-512-X',
-        Model: 'iPhone 15 Pro Max',
-        DungLuong: '512GB',
-        MauSac: 'Titan Xanh',
-        IMEI: '356782091234562',
-        Serial: 'F2LXK982P02',
-        Gia: 33490000,
-        TenShop: 'MOBILE CITY',
-        BaoHanh: '12 Tháng',
-        MaKho: 'KHO-HN-01',
-      },
-      {
-        MaMay: 'SS-S24U-512-X',
-        Model: 'Samsung Galaxy S24 Ultra',
-        DungLuong: '512GB',
-        MauSac: 'Xám Titan',
-        IMEI: '358901029384751',
-        Serial: 'R5CW109283X',
-        Gia: 29990000,
-        TenShop: 'MOBILE CITY',
-        BaoHanh: '12 Tháng',
-        MaKho: 'KHO-HCM-02',
-      },
-    ];
+    return adaptDatasetToTemplate(currentTemplate, []);
   });
 
   const [generatedLabels, setGeneratedLabels] = useState<GeneratedLabel[]>([]);
@@ -316,9 +299,23 @@ export default function App() {
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
   const [autoPrintTrigger, setAutoPrintTrigger] = useState(false);
-  const [isTemplatesModalOpen, setIsTemplatesModalOpen] = useState(false);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
+  const [isPwaModalOpen, setIsPwaModalOpen] = useState(false);
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+
+  // Listen for PWA Install Prompt
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (e: any) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    };
+  }, []);
 
   const handleOpenPrintModal = (autoPrint = false) => {
     setAutoPrintTrigger(autoPrint);
@@ -485,7 +482,7 @@ export default function App() {
     const timer = setTimeout(() => {
       lastSavedSettingsRef.current = serialized;
       saveAppSettingsToFirebase(stateObj);
-    }, 1200);
+    }, 2500);
 
     return () => clearTimeout(timer);
   }, [currentTemplate, elements, dataset, darkMode]);
@@ -725,12 +722,60 @@ export default function App() {
     showToast('Đã đổi tên mẫu', `Tên mẫu tem đã đổi thành "${newName.trim()}".`, 'success');
   };
 
-  // Switch Active Template
+  // Switch Active Template & Automatically Adapt Dataset Column Names
   const handleSelectTemplate = (tpl: LabelTemplate) => {
     setCurrentTemplate(tpl);
     resetHistory(tpl.elements);
     setSelectedElementId(null);
+
+    setDataset((prevDataset) => {
+      const adapted = adaptDatasetToTemplate(tpl, prevDataset);
+      try {
+        localStorage.setItem('qr_label_pro_dataset', JSON.stringify(adapted));
+      } catch (e) {
+        console.error('Error saving dataset to localStorage', e);
+      }
+      return adapted;
+    });
+
+    showToast(
+      `Đã đổi mẫu "${tpl.name}"`,
+      `Tên cột dữ liệu đã tự động cập nhật theo các biến của mẫu mới.`,
+      'info'
+    );
   };
+
+  // Automatically sync newly added element variables into dataset columns
+  useEffect(() => {
+    if (!elements || elements.length === 0) return;
+    const currentVars = extractVariablesFromElements(elements);
+    if (currentVars.length === 0) return;
+
+    setDataset((prev) => {
+      if (!prev || prev.length === 0) return prev;
+      const firstRowKeys = Object.keys(prev[0]);
+      const missingVars = currentVars.filter((v) => !firstRowKeys.includes(v));
+
+      if (missingVars.length === 0) return prev;
+
+      const updated = prev.map((row) => {
+        const newRow = { ...row };
+        missingVars.forEach((v) => {
+          if (newRow[v] === undefined) {
+            newRow[v] = currentTemplate.sampleData?.[v] ?? `Mẫu ${v}`;
+          }
+        });
+        return newRow;
+      });
+
+      try {
+        localStorage.setItem('qr_label_pro_dataset', JSON.stringify(updated));
+      } catch {
+        // ignore
+      }
+      return updated;
+    });
+  }, [elements, currentTemplate]);
 
   // Change Label Size Preset
   const handleSelectPresetSize = (preset: LabelSizePreset) => {
@@ -794,12 +839,13 @@ export default function App() {
           onUpdateTemplateName={handleUpdateTemplateName}
           darkMode={darkMode}
           setDarkMode={handleToggleDarkMode}
-          onOpenTemplates={() => setIsTemplatesModalOpen(true)}
+          onOpenTemplates={() => setActiveTab('templates')}
           onOpenImportModal={() => setIsImportModalOpen(true)}
           onOpenPrintModal={handleOpenPrintModal}
           onOpenExportModal={() => setIsExportModalOpen(true)}
+          onOpenPwaModal={() => setIsPwaModalOpen(true)}
           onSaveTemplate={handleSaveCurrentTemplate}
-          onNewTemplate={() => setIsTemplatesModalOpen(true)}
+          onNewTemplate={() => setActiveTab('templates')}
           datasetCount={dataset.length}
           authUser={authUser}
           onOpenAuthModal={() => setIsAuthModalOpen(true)}
@@ -811,7 +857,7 @@ export default function App() {
         />
 
         {/* Main Workspace Body */}
-        <div className="flex-1 flex overflow-hidden pb-14 md:pb-0">
+        <div className="flex-1 flex overflow-hidden">
           {/* Main Navigation Sidebar */}
           <Sidebar
             activeTab={activeTab}
@@ -830,6 +876,7 @@ export default function App() {
                 onRedo={redo}
                 zoom={zoom}
                 setZoom={setZoom}
+                onAutoFit={handleAutoFit}
                 showGrid={showGrid}
                 setShowGrid={setShowGrid}
                 snapToGrid={snapToGrid}
@@ -853,48 +900,55 @@ export default function App() {
               />
 
               {/* Mobile & Tablet Editor Sub-Tab Switcher (< lg screens) */}
-              <div className="lg:hidden flex items-center justify-around bg-slate-200/90 dark:bg-slate-800/90 p-1 border-b border-slate-300 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-300 shrink-0 gap-1">
+              <div className="lg:hidden flex items-center justify-around bg-slate-200/90 dark:bg-slate-800/90 p-1 border-b border-slate-300 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-300 shrink-0 gap-1 select-none">
                 <button
                   onClick={() => setMobileEditorTab('canvas')}
-                  className={`flex-1 py-1.5 px-1 rounded-lg flex items-center justify-center gap-1 transition-all cursor-pointer text-[11px] sm:text-xs ${
+                  className={`flex-1 py-1.5 px-1 rounded-xl flex items-center justify-center gap-1 transition-all cursor-pointer text-[11px] sm:text-xs whitespace-nowrap active:scale-95 ${
                     mobileEditorTab === 'canvas'
                       ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 font-bold shadow-xs'
                       : 'hover:bg-slate-300/60 dark:hover:bg-slate-700/60'
                   }`}
                 >
-                  <span>🎨 Khung Tem</span>
+                  <Frame className="w-3.5 h-3.5 shrink-0" />
+                  <span className="whitespace-nowrap">Khung Tem</span>
                 </button>
                 <button
                   onClick={() => setMobileEditorTab('palette')}
-                  className={`flex-1 py-1.5 px-1 rounded-lg flex items-center justify-center gap-1 transition-all cursor-pointer text-[11px] sm:text-xs ${
+                  className={`flex-1 py-1.5 px-1 rounded-xl flex items-center justify-center gap-1 transition-all cursor-pointer text-[11px] sm:text-xs whitespace-nowrap active:scale-95 ${
                     mobileEditorTab === 'palette'
                       ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 font-bold shadow-xs'
                       : 'hover:bg-slate-300/60 dark:hover:bg-slate-700/60'
                   }`}
                 >
-                  <span>➕ Thêm Đ.Tượng</span>
+                  <Shapes className="w-3.5 h-3.5 shrink-0" />
+                  <span className="whitespace-nowrap">Đối Tượng</span>
                 </button>
                 <button
                   onClick={() => setMobileEditorTab('layers')}
-                  className={`flex-1 py-1.5 px-1 rounded-lg flex items-center justify-center gap-1 transition-all cursor-pointer text-[11px] sm:text-xs ${
+                  className={`flex-1 py-1.5 px-1 rounded-xl flex items-center justify-center gap-1 transition-all cursor-pointer text-[11px] sm:text-xs whitespace-nowrap active:scale-95 ${
                     mobileEditorTab === 'layers'
                       ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 font-bold shadow-xs'
                       : 'hover:bg-slate-300/60 dark:hover:bg-slate-700/60'
                   }`}
                 >
-                  <span>📑 Lớp ({elements.length})</span>
+                  <Layers className="w-3.5 h-3.5 shrink-0" />
+                  <span className="whitespace-nowrap">Lớp</span>
+                  <span className="px-1 py-0.2 rounded-full bg-slate-200/80 dark:bg-slate-700/80 text-[10px] font-bold font-mono">
+                    {elements.length}
+                  </span>
                 </button>
                 <button
                   onClick={() => setMobileEditorTab('properties')}
-                  className={`flex-1 py-1.5 px-1 rounded-lg flex items-center justify-center gap-1 transition-all cursor-pointer text-[11px] sm:text-xs relative ${
+                  className={`flex-1 py-1.5 px-1 rounded-xl flex items-center justify-center gap-1 transition-all cursor-pointer text-[11px] sm:text-xs whitespace-nowrap relative active:scale-95 ${
                     mobileEditorTab === 'properties'
                       ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 font-bold shadow-xs'
                       : 'hover:bg-slate-300/60 dark:hover:bg-slate-700/60'
                   }`}
                 >
-                  <span>⚙️ Thuộc Tính</span>
+                  <SlidersHorizontal className="w-3.5 h-3.5 shrink-0" />
+                  <span className="whitespace-nowrap">Thuộc Tính</span>
                   {selectedElementId && (
-                    <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse shrink-0" />
+                    <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-pulse shrink-0" />
                   )}
                 </button>
               </div>
@@ -1080,6 +1134,7 @@ export default function App() {
                     selectedElementId={selectedElementId}
                     onSelectElement={setSelectedElementId}
                     onUpdateElement={handleUpdateElement}
+                    onUpdateElements={updateElements}
                     onAddElement={handleAddElement}
                     onDeleteElement={handleDeleteElement}
                     onDuplicateElement={handleDuplicateElement}
@@ -1134,6 +1189,7 @@ export default function App() {
               onSetDataset={setDataset}
               onOpenImportModal={() => setIsImportModalOpen(true)}
               elements={elements}
+              template={currentTemplate}
             />
           )}
 
@@ -1152,16 +1208,13 @@ export default function App() {
 
           {/* TAB 4: TEMPLATE LIBRARY */}
           {activeTab === 'templates' && (
-            <div className="flex-1 flex justify-center items-center p-6 bg-slate-100 dark:bg-slate-950">
-              <TemplateGalleryModal
-                isOpen={true}
-                onClose={() => setActiveTab('editor')}
-                templates={allTemplates}
-                currentTemplateId={currentTemplate.id}
-                onSelectTemplate={handleSelectTemplate}
-                onRefreshTemplates={() => setAllTemplates(getAllTemplates())}
-              />
-            </div>
+            <TemplatesView
+              templates={allTemplates}
+              currentTemplateId={currentTemplate.id}
+              onSelectTemplate={handleSelectTemplate}
+              onRefreshTemplates={() => setAllTemplates(getAllTemplates())}
+              onNavigateToEditor={() => setActiveTab('editor')}
+            />
           )}
 
           {/* TAB 5: PRINTER SETTINGS & SIZES */}
@@ -1188,12 +1241,18 @@ export default function App() {
         dataset={dataset}
         onSetDataset={setDataset}
         elements={elements}
+        template={currentTemplate}
       />
 
       <AuthModal
         isOpen={isAuthModalOpen || (!authLoading && !isLoggedIn)}
         onClose={() => setIsAuthModalOpen(false)}
         required={!isLoggedIn}
+        authUser={authUser}
+        onLogout={async () => {
+          await logoutUser();
+          showToast('Đã đăng xuất', 'Bạn đã quay về phiên làm việc Khách.', 'info');
+        }}
         onSuccess={(msg) => showToast('Đăng nhập thành công', msg, 'success')}
       />
 
@@ -1204,15 +1263,6 @@ export default function App() {
         generatedLabels={generatedLabels}
         sampleDataRow={sampleDataRow}
         autoPrintTrigger={autoPrintTrigger}
-      />
-
-      <TemplateGalleryModal
-        isOpen={isTemplatesModalOpen}
-        onClose={() => setIsTemplatesModalOpen(false)}
-        templates={allTemplates}
-        currentTemplateId={currentTemplate.id}
-        onSelectTemplate={handleSelectTemplate}
-        onRefreshTemplates={() => setAllTemplates(getAllTemplates())}
       />
 
       <ExportModal
@@ -1229,6 +1279,37 @@ export default function App() {
       <UpdateManagerModal
         isOpen={isUpdateModalOpen}
         onClose={() => setIsUpdateModalOpen(false)}
+      />
+
+      <PwaInstallModal
+        isOpen={isPwaModalOpen}
+        onClose={() => setIsPwaModalOpen(false)}
+        deferredPrompt={deferredPrompt}
+        onInstalled={() => {
+          showToast('Cài đặt thành công!', 'Ứng dụng đã được cài đặt vào thiết bị của bạn.', 'success');
+        }}
+      />
+
+      {/* Modern Floating Liquid Glass Dock (Matching user design) */}
+      <FloatingDock
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        datasetCount={dataset.length}
+        darkMode={darkMode}
+        onToggleDarkMode={handleToggleDarkMode}
+        onOpenPrintModal={(instant) => handleOpenPrintModal(instant)}
+        onOpenImportModal={() => setIsImportModalOpen(true)}
+        onOpenTemplateGallery={() => setActiveTab('templates')}
+        onOpenExportModal={() => setIsExportModalOpen(true)}
+        onOpenPwaModal={() => setIsPwaModalOpen(true)}
+        onNewTemplate={() => setActiveTab('templates')}
+        onOpenAuthModal={() => setIsAuthModalOpen(true)}
+        isLoggedIn={isLoggedIn}
+        authUser={authUser}
+        onLogout={async () => {
+          await logoutUser();
+          showToast('Đã đăng xuất', 'Bạn đã quay về phiên làm việc Khách.', 'info');
+        }}
       />
 
       <ToastNotification

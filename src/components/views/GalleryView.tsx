@@ -110,70 +110,61 @@ export const GalleryView: React.FC<GalleryViewProps> = ({
 
   return (
     <div className="flex-1 bg-slate-100 dark:bg-slate-950 flex flex-col overflow-hidden">
-      {/* Top Controls Bar */}
-      <div className="p-3 sm:p-4 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-2 sm:gap-4 flex-wrap">
-        <div className="flex items-center gap-2 sm:gap-3 flex-wrap min-w-0">
-          {/* Search bar */}
-          <div className="relative w-40 sm:w-60 min-w-[140px] shrink-0">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5 shrink-0" />
-            <input
-              type="text"
-              placeholder="Tìm IMEI, Model, Mã..."
-              value={searchTerm}
-              onChange={(e) => {
-                setSearchTerm(e.target.value);
-                setPage(1);
-              }}
-              className="w-full pl-8 pr-2.5 py-1.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-blue-500"
-            />
-          </div>
-
+      {/* Top Controls Bar - 4 Action Buttons on a Single Row */}
+      <div className="p-2 sm:p-3 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shrink-0 shadow-xs">
+        <div className="grid grid-cols-4 gap-1.5 sm:gap-2.5 w-full max-w-2xl mx-auto">
+          {/* Button 1: Select All */}
           <button
             onClick={toggleSelectAll}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-semibold cursor-pointer whitespace-nowrap shrink-0"
+            className="flex items-center justify-center gap-1 sm:gap-1.5 px-1 sm:px-2.5 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 active:scale-95 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-semibold cursor-pointer whitespace-nowrap border border-slate-200/80 dark:border-slate-700/80 transition-all"
+            title="Chọn hoặc bỏ chọn tất cả tem"
           >
-            {generatedLabels.every((l) => l.selected) ? (
-              <CheckSquare className="w-4 h-4 text-blue-600 shrink-0" />
+            {generatedLabels.length > 0 && generatedLabels.every((l) => l.selected) ? (
+              <CheckSquare className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-600 shrink-0" />
             ) : (
-              <Square className="w-4 h-4 text-slate-400 shrink-0" />
+              <Square className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-400 shrink-0" />
             )}
-            <span className="whitespace-nowrap">Chọn Tất Cả ({generatedLabels.length})</span>
+            <span className="truncate font-medium text-[11px] sm:text-xs">
+              Tất Cả ({generatedLabels.length})
+            </span>
           </button>
 
-          {selectedCount > 0 && (
-            <button
-              onClick={deleteSelected}
-              className="flex items-center gap-1 px-2.5 py-1.5 text-xs text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-xl font-semibold cursor-pointer whitespace-nowrap shrink-0"
-            >
-              <Trash2 className="w-3.5 h-3.5 shrink-0" />
-              <span className="whitespace-nowrap">Xóa Đã Chọn ({selectedCount})</span>
-            </button>
-          )}
-        </div>
+          {/* Button 2: Delete Selected */}
+          <button
+            onClick={deleteSelected}
+            disabled={selectedCount === 0}
+            className="flex items-center justify-center gap-1 sm:gap-1.5 px-1 sm:px-2 py-2 text-[11px] sm:text-xs text-red-600 dark:text-red-400 bg-red-50/70 hover:bg-red-100 dark:bg-red-950/30 dark:hover:bg-red-950/60 disabled:opacity-40 disabled:hover:bg-red-50/70 disabled:cursor-not-allowed rounded-xl font-bold cursor-pointer whitespace-nowrap border border-red-200/80 dark:border-red-900/60 active:scale-95 transition-all"
+            title="Xóa các tem đã chọn"
+          >
+            <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+            <span className="truncate">Xóa ({selectedCount})</span>
+          </button>
 
-        {/* Action buttons */}
-        <div className="flex items-center gap-2 shrink-0">
+          {/* Button 3: Download ZIP */}
           <button
             onClick={onOpenExportModal}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold rounded-xl cursor-pointer whitespace-nowrap shrink-0"
+            className="flex items-center justify-center gap-1 sm:gap-1.5 px-1 sm:px-2.5 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 active:scale-95 text-slate-700 dark:text-slate-200 text-[11px] sm:text-xs font-semibold rounded-xl cursor-pointer whitespace-nowrap border border-slate-200/80 dark:border-slate-700/80 transition-all"
+            title="Tải ảnh các tem về dạng file nén ZIP"
           >
-            <Download className="w-4 h-4 shrink-0" />
-            <span className="whitespace-nowrap">Tải File ZIP</span>
+            <Download className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-500 dark:text-slate-400 shrink-0" />
+            <span className="truncate">Tải ZIP</span>
           </button>
 
+          {/* Button 4: Print Selected */}
           <button
             onClick={onOpenPrintModal}
             disabled={selectedCount === 0}
-            className="flex items-center gap-1.5 px-4 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-bold rounded-xl shadow-md shadow-blue-500/20 cursor-pointer whitespace-nowrap shrink-0"
+            className="flex items-center justify-center gap-1 sm:gap-1.5 px-1 sm:px-3 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed text-white text-[11px] sm:text-xs font-bold rounded-xl shadow-md shadow-blue-500/20 cursor-pointer whitespace-nowrap transition-all"
+            title="Mở hộp thoại in ấn hàng loạt cho các tem đã chọn"
           >
-            <Printer className="w-4 h-4 shrink-0" />
-            <span className="whitespace-nowrap">In Tem Đã Chọn ({selectedCount})</span>
+            <Printer className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+            <span className="truncate">In ({selectedCount})</span>
           </button>
         </div>
       </div>
 
       {/* Main Grid Gallery */}
-      <div className="flex-1 p-6 overflow-y-auto">
+      <div className="flex-1 p-3 sm:p-6 overflow-y-auto pb-24 sm:pb-8">
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
           {currentPageItems.map((item) => (
             <div

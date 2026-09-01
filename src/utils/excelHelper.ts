@@ -1,27 +1,132 @@
 import * as XLSX from 'xlsx';
-import { DatasetRow, LabelElement } from '../types/label';
+import { DatasetRow, LabelElement, LabelTemplate } from '../types/label';
 
 /**
  * Extracts variable names (e.g. ['Model', 'Serial']) from label elements.
  */
 export function extractVariablesFromElements(elements: LabelElement[]): string[] {
   const varsSet = new Set<string>();
-  const regex = /\{\{\s*([a-zA-Z0-9_]+)(?:\s*\|\s*[a-zA-Z0-9_]+)?\s*\}\}/g;
+  const regex = /\{\{\s*([^{}|]+?)(?:\s*\|\s*([a-zA-Z0-9_]+))?\s*\}\}/g;
 
   elements.forEach((el) => {
     if ('content' in el && typeof el.content === 'string') {
       let match;
-      // Reset regex index
       regex.lastIndex = 0;
       while ((match = regex.exec(el.content)) !== null) {
         if (match[1]) {
-          varsSet.add(match[1]);
+          varsSet.add(match[1].trim());
         }
       }
     }
   });
 
   return Array.from(varsSet);
+}
+
+/**
+ * Gets all column keys/variables required by a template combining sampleData and elements.
+ * Prioritizes variables explicitly referenced in template elements (e.g. {{Model}}, {{Serial}}).
+ */
+export function getTemplateColumnKeys(template?: LabelTemplate, elements?: LabelElement[]): string[] {
+  const els = (elements && elements.length > 0) ? elements : (template?.elements || []);
+  const varsFromElements = extractVariablesFromElements(els);
+
+  // If template elements explicitly contain variables, return ONLY those variables!
+  if (varsFromElements.length > 0) {
+    return varsFromElements;
+  }
+
+  // Fallback if no variables in elements: use sampleData keys if available
+  const sampleDataKeys = Object.keys(template?.sampleData || {}).filter((k) => !k.startsWith('_'));
+  if (sampleDataKeys.length > 0) {
+    return sampleDataKeys;
+  }
+
+  return ['Model', 'Serial'];
+}
+
+/**
+ * Automatically converts or maps dataset rows when switching templates.
+ * Renames column headers to match the new template's variable keys and strips unneeded columns.
+ */
+export function adaptDatasetToTemplate(
+  template: LabelTemplate,
+  currentDataset: DatasetRow[],
+  overrideElements?: LabelElement[]
+): DatasetRow[] {
+  const targetKeys = getTemplateColumnKeys(template, overrideElements);
+  const sampleData = template.sampleData || {};
+
+  // Clean sample data object (remove internal keys starting with _)
+  const cleanSampleData: Record<string, any> = {};
+  targetKeys.forEach((key) => {
+    if (sampleData[key] !== undefined) {
+      cleanSampleData[key] = sampleData[key];
+    } else if (sampleData._sampleOdd && sampleData._sampleOdd[key] !== undefined) {
+      cleanSampleData[key] = sampleData._sampleOdd[key];
+    } else {
+      cleanSampleData[key] = `Mẫu ${key}`;
+    }
+  });
+
+  if (!currentDataset || currentDataset.length === 0) {
+    const row1 = { ...cleanSampleData };
+    const row2 = { ...cleanSampleData };
+    if (row2.Serial) row2.Serial = String(row2.Serial).replace(/1$/, '2');
+    if (row2.IMEI) row2.IMEI = String(row2.IMEI).replace(/1$/, '2');
+    if (row2.MaMay) row2.MaMay = `${row2.MaMay}-02`;
+    return [row1, row2];
+  }
+
+  // If current dataset has rows, map existing column data to new target keys
+  return currentDataset.map((oldRow, rowIndex) => {
+    const oldKeys = Object.keys(oldRow).filter((k) => !k.startsWith('_'));
+    const newRow: DatasetRow = {};
+
+    targetKeys.forEach((targetKey, targetIdx) => {
+      // 1. If oldRow already has targetKey with a non-empty value, retain it
+      if (oldRow[targetKey] !== undefined && oldRow[targetKey] !== '') {
+        newRow[targetKey] = oldRow[targetKey];
+      } else {
+        // 2. Try fuzzy key match (e.g. 'Serial' or 'IMEI' matches 'IMEI / Serial')
+        const fuzzyKey = oldKeys.find(
+          (k) =>
+            k &&
+            oldRow[k] !== undefined &&
+            oldRow[k] !== '' &&
+            (targetKey.toLowerCase().includes(k.toLowerCase()) ||
+              k.toLowerCase().includes(targetKey.toLowerCase()))
+        );
+
+        if (fuzzyKey) {
+          newRow[targetKey] = oldRow[fuzzyKey];
+        }
+        // 3. Otherwise if there's an old column at the same position, map its value
+        else if (
+          targetIdx < oldKeys.length &&
+          oldRow[oldKeys[targetIdx]] !== undefined &&
+          oldRow[oldKeys[targetIdx]] !== ''
+        ) {
+          newRow[targetKey] = oldRow[oldKeys[targetIdx]];
+        }
+        // 4. Otherwise use sample value default
+        else {
+          let sampleVal = cleanSampleData[targetKey] ?? '';
+          if (rowIndex > 0 && typeof sampleVal === 'string') {
+            if (
+              targetKey.toLowerCase().includes('serial') ||
+              targetKey.toLowerCase().includes('imei')
+            ) {
+              sampleVal = sampleVal.replace(/1$/, String(rowIndex + 1));
+            }
+          }
+          newRow[targetKey] = sampleVal;
+        }
+      }
+    });
+
+    return newRow;
+  });
 }
 
 /**
@@ -68,7 +173,7 @@ export async function parseExcelOrCsvFile(file: File): Promise<{ rows: DatasetRo
 /**
  * Generates sample Phone Shop Data Excel workbook matching template variables.
  */
-export function generateSamplePhoneShopExcel(elements?: LabelElement[]): void {
+export function generateSamplePhoneShopExcel(elements?: LabelElement[], template?: LabelTemplate): void {
   const fullSampleRows: Record<string, string | number>[] = [
     {
       MaMay: 'IP15P-256-NT',
@@ -121,8 +226,8 @@ export function generateSamplePhoneShopExcel(elements?: LabelElement[]): void {
   ];
 
   let keysToInclude: string[] = [];
-  if (elements && elements.length > 0) {
-    keysToInclude = extractVariablesFromElements(elements);
+  if (template || (elements && elements.length > 0)) {
+    keysToInclude = getTemplateColumnKeys(template, elements);
   }
 
   let finalSampleData: Record<string, string | number>[] = [];
@@ -132,7 +237,7 @@ export function generateSamplePhoneShopExcel(elements?: LabelElement[]): void {
     finalSampleData = fullSampleRows.map((row) => {
       const filteredRow: Record<string, string | number> = {};
       keysToInclude.forEach((key) => {
-        filteredRow[key] = row[key] !== undefined ? row[key] : `Mẫu ${key}`;
+        filteredRow[key] = row[key] !== undefined ? row[key] : (template?.sampleData?.[key] ?? `Mẫu ${key}`);
       });
       return filteredRow;
     });
@@ -168,17 +273,32 @@ export function generateSamplePhoneShopExcel(elements?: LabelElement[]): void {
  */
 export function substituteVariables(templateText: string, dataRow: DatasetRow): string {
   if (!templateText) return '';
+  if (dataRow && (dataRow._isEmpty || dataRow._isEvenEmpty && !dataRow._oddRow)) return '';
 
-  return templateText.replace(/\{\{\s*([a-zA-Z0-9_]+)(?:\s*\|\s*([a-zA-Z0-9_]+))?\s*\}\}/g, (_, key, filter) => {
-    let value = dataRow[key];
+  return templateText.replace(/\{\{\s*([^{}|]+?)(?:\s*\|\s*([a-zA-Z0-9_]+))?\s*\}\}/g, (_, rawKey, filter) => {
+    const key = rawKey.trim();
+    let value = dataRow ? dataRow[key] : undefined;
+
+    // Fuzzy matching if key has space or case mismatch e.g. "IMEI / Serial" vs "IMEI/Serial"
+    if ((value === undefined || value === null) && dataRow) {
+      const normalizedKey = key.replace(/\s+/g, '').toLowerCase();
+      const matchedDataKey = Object.keys(dataRow).find(
+        (k) => k.replace(/\s+/g, '').toLowerCase() === normalizedKey
+      );
+      if (matchedDataKey) {
+        value = dataRow[matchedDataKey];
+      }
+    }
+
     if (value === undefined || value === null) {
       // Clean fallback for preview/display without raw {{...}}
       if (key === 'Model') return 'iPhone 15 Pro Max';
       if (key === 'Serial') return 'F2LXK982P01';
       if (key === 'IMEI') return '356782091234561';
-      if (key === 'Gia') return filter === 'currency' ? '28.990.000 ₫' : '28990000';
-      if (key === 'MaMay') return 'IP15P-256';
-      if (key === 'TenShop') return 'MOBILE CITY';
+      if (key.includes('IMEI') || key.includes('Serial')) return '356782091234561';
+      if (key === 'Gia' || key === 'Giá') return filter === 'currency' ? '28.990.000 ₫' : '28990000';
+      if (key === 'MaMay' || key === 'Mã Máy') return 'IP15P-256';
+      if (key === 'TenShop' || key === 'Tên Shop') return 'MOBILE CITY';
       return `[${key}]`;
     }
 

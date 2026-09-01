@@ -30,6 +30,7 @@ interface ToolbarProps {
   onRedo: () => void;
   zoom: number;
   setZoom: (fn: (z: number) => number) => void;
+  onAutoFit?: () => void;
   showGrid: boolean;
   setShowGrid: (val: boolean) => void;
   snapToGrid: boolean;
@@ -52,6 +53,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
   onRedo,
   zoom,
   setZoom,
+  onAutoFit,
   showGrid,
   setShowGrid,
   snapToGrid,
@@ -67,22 +69,30 @@ export const Toolbar: React.FC<ToolbarProps> = ({
   onLayerMove,
 }) => {
   return (
-    <div className="h-11 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-3 flex items-center justify-between overflow-x-auto no-scrollbar select-none gap-2 shrink-0">
+    <div className="h-11 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-2 sm:px-3 flex items-center justify-between overflow-x-auto no-scrollbar touch-pan-x select-none gap-1 sm:gap-2 shrink-0">
       {/* Left: History & Zoom */}
       <div className="flex items-center gap-1 shrink-0">
         <button
           disabled={!canUndo}
           onClick={onUndo}
-          className="p-1.5 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 rounded transition-colors cursor-pointer"
-          title="Undo (Ctrl+Z)"
+          className={`p-1.5 rounded-lg transition-all ${
+            canUndo
+              ? 'text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/60 active:scale-95 cursor-pointer font-bold'
+              : 'text-slate-300 dark:text-slate-700 opacity-40 cursor-not-allowed'
+          }`}
+          title={canUndo ? 'Hoàn tác bước trước (Undo - Ctrl+Z)' : 'Chưa có thao tác để hoàn tác'}
         >
           <Undo className="w-4 h-4" />
         </button>
         <button
           disabled={!canRedo}
           onClick={onRedo}
-          className="p-1.5 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 rounded transition-colors cursor-pointer"
-          title="Redo (Ctrl+Y)"
+          className={`p-1.5 rounded-lg transition-all ${
+            canRedo
+              ? 'text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/60 active:scale-95 cursor-pointer font-bold'
+              : 'text-slate-300 dark:text-slate-700 opacity-40 cursor-not-allowed'
+          }`}
+          title={canRedo ? 'Làm lại bước kế tiếp (Redo - Ctrl+Y)' : 'Chưa có thao tác để làm lại'}
         >
           <Redo className="w-4 h-4" />
         </button>
@@ -127,12 +137,23 @@ export const Toolbar: React.FC<ToolbarProps> = ({
         >
           <ZoomIn className="w-4 h-4" />
         </button>
+        {onAutoFit && (
+          <button
+            onClick={onAutoFit}
+            className="flex items-center gap-1 px-2 py-1 text-[11px] font-bold text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-100 dark:hover:bg-blue-900/60 rounded-md transition-colors cursor-pointer shrink-0"
+            title="Tự động phóng/thu vừa khít màn hình"
+          >
+            <Maximize2 className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Vừa Màn Hình</span>
+            <span className="sm:hidden">Vừa KH</span>
+          </button>
+        )}
         <button
           onClick={() => setZoom(() => 2.5)}
           className="p-1.5 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded transition-colors cursor-pointer"
           title="Đặt lại zoom mặc định (250%)"
         >
-          <Maximize2 className="w-3.5 h-3.5" />
+          <span className="text-[10px] font-mono font-bold">250%</span>
         </button>
 
         <div className="h-4 w-px bg-slate-200 dark:bg-slate-700 mx-1" />

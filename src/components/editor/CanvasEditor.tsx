@@ -1,9 +1,15 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
-import { DatasetRow, LabelElement, LabelTemplate } from '../../types/label';
+import { DatasetRow, LabelElement, LabelTemplate, TextElement } from '../../types/label';
 import { substituteVariables } from '../../utils/excelHelper';
 import { RulerAndGrid } from './RulerAndGrid';
 import { generateQRDataUrl } from '../../utils/qrGenerator';
 import { generateBarcodeDataUrl } from '../../utils/barcodeGenerator';
+import {
+  shrinkFontSizeToFitLine,
+  expandHeightToFitContent,
+  expandWidthToFitSingleLine,
+  isTextOverflowing,
+} from '../../utils/textFitHelper';
 import {
   Edit3,
   Trash2,
@@ -37,6 +43,12 @@ import {
   Ungroup,
   Folder,
   Component,
+  Maximize2,
+  Minimize2,
+  AlertTriangle,
+  Scaling,
+  MoveVertical,
+  MoveHorizontal,
 } from 'lucide-react';
 
 interface CanvasEditorProps {
@@ -145,8 +157,11 @@ export const CanvasEditor: React.FC<CanvasEditorProps> = ({
   const canvasWidthPx = mmToPx(template.widthMm);
   const canvasHeightPx = mmToPx(template.heightMm);
 
+  const [isQuickToolbarHidden, setIsQuickToolbarHidden] = useState<boolean>(false);
+
   // Sync selectedElementIds when selectedElementId prop or elements change
   useEffect(() => {
+    setIsQuickToolbarHidden(false);
     if (selectedElementId) {
       const target = elements.find((e) => e.id === selectedElementId);
       if (target?.groupId) {
@@ -341,7 +356,7 @@ export const CanvasEditor: React.FC<CanvasEditorProps> = ({
 
       // 2. If row has _oddRow or _evenRow attached
       if (sampleDataRow._oddRow || sampleDataRow._evenRow) {
-        return isTop ? sampleDataRow._oddRow || sampleDataRow : sampleDataRow._evenRow || {};
+        return isTop ? sampleDataRow._oddRow || sampleDataRow : sampleDataRow._evenRow || { _isEmpty: true };
       }
 
       // 3. If template has sampleData._sampleOdd / _sampleEven
@@ -901,8 +916,15 @@ export const CanvasEditor: React.FC<CanvasEditorProps> = ({
         onUpdateElements: updateFnPlural,
       } = dragRef.current;
 
-      if (draggingId && updateFnPlural) {
-        updateFnPlural(elements, true);
+      if (draggingId) {
+        if (updateFnPlural) {
+          updateFnPlural(elements, true);
+        } else {
+          const el = elements.find((item) => item.id === draggingId);
+          if (el) {
+            updateFn({ ...el }, true);
+          }
+        }
       } else if (resizingId) {
         const el = elements.find((item) => item.id === resizingId);
         if (el) {
@@ -1056,7 +1078,7 @@ export const CanvasEditor: React.FC<CanvasEditorProps> = ({
           setEditingTextId(null);
         }
       }}
-      className="flex-1 bg-slate-200 dark:bg-slate-950 overflow-auto relative flex items-center justify-center p-6 sm:p-8 select-none"
+      className="flex-1 bg-slate-200 dark:bg-slate-950 overflow-auto relative flex items-center justify-center p-2 sm:p-8 select-none min-h-0"
     >
       {/* HUD Mouse Coordinates Indicator */}
       {mouseCanvasPos && (
@@ -1119,6 +1141,210 @@ export const CanvasEditor: React.FC<CanvasEditorProps> = ({
             title="Căn lề phải"
           >
             <AlignRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
+      {/* Docked Quick Action Toolbar for Single Selected Element (Positioned in Top Header so it never obscures canvas) */}
+      {selectedElement && selectedElementIds.length <= 1 && !isQuickToolbarHidden && (
+        <div
+          onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+          className="absolute top-2 sm:top-4 left-1/2 -translate-x-1/2 bg-slate-900/95 text-white backdrop-blur-md px-2.5 py-1.5 rounded-2xl shadow-2xl border border-slate-700/80 flex items-center gap-1 sm:gap-1.5 text-xs z-40 pointer-events-auto max-w-[96vw] overflow-x-auto no-scrollbar animate-fade-in"
+        >
+          {/* Quick Edit Text Content */}
+          {selectedElement.type === 'text' && (
+            <button
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={(e) => {
+                e.stopPropagation();
+                setEditingTextId(selectedElement.id);
+              }}
+              className="p-1.5 hover:bg-slate-800 rounded-xl text-blue-400 hover:text-blue-300 transition-colors cursor-pointer shrink-0"
+              title="Sửa nội dung trực tiếp (Double click)"
+            >
+              <Edit3 className="w-4 h-4" />
+            </button>
+          )}
+
+          {/* Text Controls */}
+          {selectedElement.type === 'text' && (
+            <>
+              <span className="w-px h-3.5 bg-slate-700 shrink-0" />
+              <div className="flex items-center gap-0.5 bg-slate-800/90 rounded-xl px-1 py-0.5 shrink-0 border border-slate-700/50">
+                <button
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() =>
+                    onUpdateElement({
+                      ...selectedElement,
+                      fontSize: Math.max(1, (selectedElement as TextElement).fontSize - 0.5),
+                    })
+                  }
+                  className="p-1 hover:bg-slate-700 rounded-lg text-slate-200 cursor-pointer"
+                  title="Giảm cỡ chữ"
+                >
+                  <Minus className="w-3 h-3" />
+                </button>
+                <span className="text-[10px] font-mono font-bold px-1 text-blue-300 min-w-[28px] text-center">
+                  {(selectedElement as TextElement).fontSize}pt
+                </span>
+                <button
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() =>
+                    onUpdateElement({
+                      ...selectedElement,
+                      fontSize: (selectedElement as TextElement).fontSize + 0.5,
+                    })
+                  }
+                  className="p-1 hover:bg-slate-700 rounded-lg text-slate-200 cursor-pointer"
+                  title="Tăng cỡ chữ"
+                >
+                  <Plus className="w-3 h-3" />
+                </button>
+              </div>
+
+              <button
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() =>
+                  onUpdateElement({
+                    ...selectedElement,
+                    fontWeight: (selectedElement as TextElement).fontWeight === 'bold' ? 'normal' : 'bold',
+                  })
+                }
+                className={`p-1.5 rounded-xl transition-colors cursor-pointer shrink-0 ${
+                  (selectedElement as TextElement).fontWeight === 'bold'
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'hover:bg-slate-800 text-slate-200'
+                }`}
+                title="In đậm (Bold)"
+              >
+                <Bold className="w-3.5 h-3.5" />
+              </button>
+
+              <button
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() =>
+                  onUpdateElement({
+                    ...selectedElement,
+                    textAlign:
+                      (selectedElement as TextElement).textAlign === 'left'
+                        ? 'center'
+                        : (selectedElement as TextElement).textAlign === 'center'
+                        ? 'right'
+                        : 'left',
+                  })
+                }
+                className="p-1.5 hover:bg-slate-800 rounded-xl text-slate-200 cursor-pointer shrink-0"
+                title="Đổi căn lề"
+              >
+                {(selectedElement as TextElement).textAlign === 'center' ? (
+                  <AlignCenter className="w-3.5 h-3.5" />
+                ) : (selectedElement as TextElement).textAlign === 'right' ? (
+                  <AlignRight className="w-3.5 h-3.5" />
+                ) : (
+                  <AlignLeft className="w-3.5 h-3.5" />
+                )}
+              </button>
+
+              <span className="w-px h-3.5 bg-slate-700 shrink-0" />
+              <button
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const updated = shrinkFontSizeToFitLine(selectedElement as TextElement, getElementDataRow(selectedElement));
+                  onUpdateElement(updated);
+                }}
+                className="px-2 py-1 bg-blue-600/90 hover:bg-blue-600 active:scale-95 text-white rounded-xl text-[10px] font-semibold flex items-center gap-1 cursor-pointer shrink-0 shadow-xs"
+                title="Tự động co cỡ chữ vừa 1 hàng"
+              >
+                <Scaling className="w-3 h-3 text-blue-200" />
+                <span>Co chữ</span>
+              </button>
+
+              <button
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const updated = expandHeightToFitContent(selectedElement as TextElement, getElementDataRow(selectedElement));
+                  onUpdateElement(updated);
+                }}
+                className="px-2 py-1 bg-emerald-600/90 hover:bg-emerald-600 active:scale-95 text-white rounded-xl text-[10px] font-semibold flex items-center gap-1 cursor-pointer shrink-0 shadow-xs"
+                title="Tự động giãn chiều cao để hiện đủ nội dung"
+              >
+                <MoveVertical className="w-3 h-3 text-emerald-200" />
+                <span>Giãn cao</span>
+              </button>
+            </>
+          )}
+
+          {/* Quick Rotate 90 deg */}
+          <span className="w-px h-3.5 bg-slate-700 shrink-0" />
+          <button
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() =>
+              onUpdateElement({
+                ...selectedElement,
+                rotation: (((selectedElement as any).rotation || 0) + 90) % 360,
+              })
+            }
+            className="p-1.5 hover:bg-slate-800 rounded-xl text-indigo-400 hover:text-indigo-300 transition-colors cursor-pointer shrink-0"
+            title="Xoay góc 90 độ"
+          >
+            <RotateCw className="w-3.5 h-3.5" />
+          </button>
+
+          {/* Duplicate */}
+          {onDuplicateElement && (
+            <button
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => onDuplicateElement(selectedElement.id)}
+              className="p-1.5 hover:bg-slate-800 rounded-xl text-slate-200 hover:text-white transition-colors cursor-pointer shrink-0"
+              title="Sao chép"
+            >
+              <Copy className="w-3.5 h-3.5" />
+            </button>
+          )}
+
+          {/* Lock */}
+          <button
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() =>
+              onUpdateElement({
+                ...selectedElement,
+                locked: !selectedElement.locked,
+              })
+            }
+            className="p-1.5 hover:bg-slate-800 rounded-xl text-slate-200 hover:text-white transition-colors cursor-pointer shrink-0"
+            title={selectedElement.locked ? 'Mở khóa vị trí' : 'Khóa vị trí đối tượng'}
+          >
+            {selectedElement.locked ? (
+              <Lock className="w-3.5 h-3.5 text-amber-400" />
+            ) : (
+              <Unlock className="w-3.5 h-3.5" />
+            )}
+          </button>
+
+          {/* Delete */}
+          {onDeleteElement && (
+            <button
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => onDeleteElement(selectedElement.id)}
+              className="p-1.5 hover:bg-red-900/60 text-red-400 hover:text-red-300 rounded-xl transition-colors cursor-pointer shrink-0"
+              title="Xóa đối tượng"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
+
+          {/* Dismiss / Close Button */}
+          <span className="w-px h-3.5 bg-slate-700 shrink-0" />
+          <button
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => setIsQuickToolbarHidden(true)}
+            className="p-1.5 hover:bg-slate-800 text-slate-400 hover:text-slate-200 rounded-xl transition-colors cursor-pointer shrink-0"
+            title="Đóng thanh công cụ nhanh"
+          >
+            <X className="w-3.5 h-3.5" />
           </button>
         </div>
       )}
@@ -1250,169 +1476,13 @@ export const CanvasEditor: React.FC<CanvasEditorProps> = ({
                   zIndex: el.zIndex,
                 }}
               >
-                {/* Floating On-Canvas Quick Editing Toolbar for Selected Element */}
-                {isSelected && !isEditing && (
-                  <div
-                    onClick={(e) => e.stopPropagation()}
-                    onMouseDown={(e) => e.stopPropagation()}
-                    className="absolute -top-11 left-1/2 -translate-x-1/2 bg-slate-900/90 text-white backdrop-blur-md px-2 py-1 rounded-xl shadow-2xl border border-slate-700/60 flex items-center gap-1 text-xs z-50 pointer-events-auto whitespace-nowrap animate-fade-in"
-                  >
-                    <button
-                      onMouseDown={(e) => e.preventDefault()}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setEditingTextId(el.id);
-                      }}
-                      className="p-1 hover:bg-slate-700 rounded-lg text-slate-200 transition-colors cursor-pointer"
-                      title="Sửa nội dung trực tiếp"
-                    >
-                      <Edit3 className="w-3.5 h-3.5 text-blue-400" />
-                    </button>
-
-                    {el.type === 'text' && (
-                      <>
-                        <span className="w-px h-3 bg-slate-700" />
-                        <button
-                          onMouseDown={(e) => e.preventDefault()}
-                          onClick={() =>
-                            onUpdateElement({
-                              ...el,
-                              fontSize: Math.max(1, el.fontSize - 0.5),
-                            })
-                          }
-                          className="p-1 hover:bg-slate-700 rounded-lg text-slate-200 cursor-pointer"
-                          title="Giảm cỡ chữ"
-                        >
-                          <Minus className="w-3 h-3" />
-                        </button>
-                        <span className="text-[10px] font-mono font-bold px-0.5 text-blue-300">
-                          {el.fontSize}pt
-                        </span>
-                        <button
-                          onMouseDown={(e) => e.preventDefault()}
-                          onClick={() =>
-                            onUpdateElement({
-                              ...el,
-                              fontSize: el.fontSize + 0.5,
-                            })
-                          }
-                          className="p-1 hover:bg-slate-700 rounded-lg text-slate-200 cursor-pointer"
-                          title="Tăng cỡ chữ"
-                        >
-                          <Plus className="w-3 h-3" />
-                        </button>
-
-                        <span className="w-px h-3 bg-slate-700" />
-                        <button
-                          onMouseDown={(e) => e.preventDefault()}
-                          onClick={() =>
-                            onUpdateElement({
-                              ...el,
-                              fontWeight: el.fontWeight === 'bold' ? 'normal' : 'bold',
-                            })
-                          }
-                          className={`p-1 rounded-lg transition-colors cursor-pointer ${
-                            el.fontWeight === 'bold'
-                              ? 'bg-blue-600 text-white'
-                              : 'hover:bg-slate-700 text-slate-200'
-                          }`}
-                          title="In đậm"
-                        >
-                          <Bold className="w-3 h-3" />
-                        </button>
-
-                        <button
-                          onMouseDown={(e) => e.preventDefault()}
-                          onClick={() =>
-                            onUpdateElement({
-                              ...el,
-                              textAlign:
-                                el.textAlign === 'left'
-                                  ? 'center'
-                                  : el.textAlign === 'center'
-                                  ? 'right'
-                                  : 'left',
-                            })
-                          }
-                          className="p-1 hover:bg-slate-700 rounded-lg text-slate-200 cursor-pointer"
-                          title="Đổi căn lề"
-                        >
-                          {el.textAlign === 'center' ? (
-                            <AlignCenter className="w-3 h-3" />
-                          ) : el.textAlign === 'right' ? (
-                            <AlignRight className="w-3 h-3" />
-                          ) : (
-                            <AlignLeft className="w-3 h-3" />
-                          )}
-                        </button>
-                      </>
-                    )}
-
-                    {/* Quick Rotate 90 deg */}
-                    <span className="w-px h-3 bg-slate-700" />
-                    <button
-                      onMouseDown={(e) => e.preventDefault()}
-                      onClick={() =>
-                        onUpdateElement({
-                          ...el,
-                          rotation: ((el.rotation || 0) + 90) % 360,
-                        })
-                      }
-                      className="p-1 hover:bg-slate-700 rounded-lg text-slate-200 cursor-pointer"
-                      title="Xoay 90 độ"
-                    >
-                      <RotateCw className="w-3 h-3 text-indigo-400" />
-                    </button>
-
-                    {/* Duplicate */}
-                    {onDuplicateElement && (
-                      <button
-                        onMouseDown={(e) => e.preventDefault()}
-                        onClick={() => onDuplicateElement(el.id)}
-                        className="p-1 hover:bg-slate-700 rounded-lg text-slate-200 cursor-pointer"
-                        title="Sao chép"
-                      >
-                        <Copy className="w-3 h-3" />
-                      </button>
-                    )}
-
-                    {/* Lock */}
-                    <button
-                      onMouseDown={(e) => e.preventDefault()}
-                      onClick={() =>
-                        onUpdateElement({
-                          ...el,
-                          locked: !el.locked,
-                        })
-                      }
-                      className="p-1 hover:bg-slate-700 rounded-lg text-slate-200 cursor-pointer"
-                      title={el.locked ? 'Mở khóa' : 'Khóa vị trí'}
-                    >
-                      {el.locked ? (
-                        <Lock className="w-3 h-3 text-amber-400" />
-                      ) : (
-                        <Unlock className="w-3 h-3" />
-                      )}
-                    </button>
-
-                    {/* Delete */}
-                    {onDeleteElement && (
-                      <button
-                        onMouseDown={(e) => e.preventDefault()}
-                        onClick={() => onDeleteElement(el.id)}
-                        className="p-1 hover:bg-red-900/60 text-red-300 rounded-lg cursor-pointer"
-                        title="Xóa đối tượng"
-                      >
-                        <Trash2 className="w-3 h-3 text-red-400" />
-                      </button>
-                    )}
-                  </div>
-                )}
-
                 {/* Element Render Content */}
-                {el.type === 'text' && (
-                  <div
-                    className="w-full h-full flex flex-col justify-start overflow-hidden leading-tight cursor-text whitespace-pre-wrap break-words select-none"
+                {el.type === 'text' && (() => {
+                  const overflowing = isTextOverflowing(el as TextElement, getElementDataRow(el));
+                  return (
+                    <div className="w-full h-full relative group/text">
+                      <div
+                        className="w-full h-full flex flex-col justify-start overflow-hidden leading-tight cursor-text whitespace-pre-wrap break-words select-none"
                         style={{
                           fontSize: `${el.fontSize * (zoom * 1.33)}px`,
                           fontFamily: el.fontFamily || 'sans-serif',
@@ -1425,7 +1495,25 @@ export const CanvasEditor: React.FC<CanvasEditorProps> = ({
                       >
                         {previewVariables ? substituteVariables(el.content, getElementDataRow(el)) : el.content}
                       </div>
-                    )}
+
+                      {overflowing && (
+                        <div
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onSelectElement(el.id);
+                            const updated = expandHeightToFitContent(el as TextElement, getElementDataRow(el));
+                            onUpdateElement(updated);
+                          }}
+                          className="absolute -bottom-2 -right-2 bg-amber-500 hover:bg-amber-600 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full shadow-lg border border-white flex items-center gap-0.5 cursor-pointer z-40 animate-pulse"
+                          title="Chữ bị đè/mất dòng do khung quá ngắn! Bấm để tự động giãn chiều cao."
+                        >
+                          <AlertTriangle className="w-2.5 h-2.5 shrink-0" />
+                          <span>Mất chữ</span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
 
                     {el.type === 'qr' && (
                       <div className="w-full h-full flex items-center justify-center overflow-hidden">
@@ -1508,53 +1596,69 @@ export const CanvasEditor: React.FC<CanvasEditorProps> = ({
                     <div
                       onMouseDown={(e) => handleMouseDownResize(e, el, 'nw')}
                       onTouchStart={(e) => handleTouchStartResize(e, el, 'nw')}
-                      className="absolute -top-2 -left-2 sm:-top-1.5 sm:-left-1.5 w-4 h-4 sm:w-3 sm:h-3 bg-white border-2 border-blue-600 rounded-full cursor-nwse-resize z-40 hover:scale-125 transition-transform shadow-xs"
+                      className="absolute -top-3 -left-3 sm:-top-1.5 sm:-left-1.5 w-6 h-6 sm:w-3.5 sm:h-3.5 bg-white border-2 border-blue-600 rounded-full cursor-nwse-resize z-40 hover:scale-125 transition-transform shadow-md touch-none flex items-center justify-center"
                       title="Kéo giãn góc trên trái"
-                    />
+                    >
+                      <span className="w-1.5 h-1.5 rounded-full bg-blue-600 sm:hidden" />
+                    </div>
                     <div
                       onMouseDown={(e) => handleMouseDownResize(e, el, 'ne')}
                       onTouchStart={(e) => handleTouchStartResize(e, el, 'ne')}
-                      className="absolute -top-2 -right-2 sm:-top-1.5 sm:-right-1.5 w-4 h-4 sm:w-3 sm:h-3 bg-white border-2 border-blue-600 rounded-full cursor-nesw-resize z-40 hover:scale-125 transition-transform shadow-xs"
+                      className="absolute -top-3 -right-3 sm:-top-1.5 sm:-right-1.5 w-6 h-6 sm:w-3.5 sm:h-3.5 bg-white border-2 border-blue-600 rounded-full cursor-nesw-resize z-40 hover:scale-125 transition-transform shadow-md touch-none flex items-center justify-center"
                       title="Kéo giãn góc trên phải"
-                    />
+                    >
+                      <span className="w-1.5 h-1.5 rounded-full bg-blue-600 sm:hidden" />
+                    </div>
                     <div
                       onMouseDown={(e) => handleMouseDownResize(e, el, 'sw')}
                       onTouchStart={(e) => handleTouchStartResize(e, el, 'sw')}
-                      className="absolute -bottom-2 -left-2 sm:-bottom-1.5 sm:-left-1.5 w-4 h-4 sm:w-3 sm:h-3 bg-white border-2 border-blue-600 rounded-full cursor-nesw-resize z-40 hover:scale-125 transition-transform shadow-xs"
+                      className="absolute -bottom-3 -left-3 sm:-bottom-1.5 sm:-left-1.5 w-6 h-6 sm:w-3.5 sm:h-3.5 bg-white border-2 border-blue-600 rounded-full cursor-nesw-resize z-40 hover:scale-125 transition-transform shadow-md touch-none flex items-center justify-center"
                       title="Kéo giãn góc dưới trái"
-                    />
+                    >
+                      <span className="w-1.5 h-1.5 rounded-full bg-blue-600 sm:hidden" />
+                    </div>
                     <div
                       onMouseDown={(e) => handleMouseDownResize(e, el, 'se')}
                       onTouchStart={(e) => handleTouchStartResize(e, el, 'se')}
-                      className="absolute -bottom-2 -right-2 sm:-bottom-1.5 sm:-right-1.5 w-4 h-4 sm:w-3 sm:h-3 bg-white border-2 border-blue-600 rounded-full cursor-se-resize z-40 hover:scale-125 transition-transform shadow-xs"
+                      className="absolute -bottom-3 -right-3 sm:-bottom-1.5 sm:-right-1.5 w-6 h-6 sm:w-3.5 sm:h-3.5 bg-white border-2 border-blue-600 rounded-full cursor-se-resize z-40 hover:scale-125 transition-transform shadow-md touch-none flex items-center justify-center"
                       title="Kéo giãn góc dưới phải"
-                    />
+                    >
+                      <span className="w-1.5 h-1.5 rounded-full bg-blue-600 sm:hidden" />
+                    </div>
 
                     {/* Edges */}
                     <div
                       onMouseDown={(e) => handleMouseDownResize(e, el, 'n')}
                       onTouchStart={(e) => handleTouchStartResize(e, el, 'n')}
-                      className="absolute -top-2 left-1/2 -translate-x-1/2 sm:-top-1.5 w-4 h-4 sm:w-3 sm:h-3 bg-white border-2 border-blue-600 rounded-full cursor-ns-resize z-40 hover:scale-125 transition-transform shadow-xs"
+                      className="absolute -top-3 left-1/2 -translate-x-1/2 sm:-top-1.5 w-6 h-6 sm:w-3.5 sm:h-3.5 bg-white border-2 border-blue-600 rounded-full cursor-ns-resize z-40 hover:scale-125 transition-transform shadow-md touch-none flex items-center justify-center"
                       title="Kéo giãn chiều cao (trên)"
-                    />
+                    >
+                      <span className="w-1.5 h-1.5 rounded-full bg-blue-600 sm:hidden" />
+                    </div>
                     <div
                       onMouseDown={(e) => handleMouseDownResize(e, el, 's')}
                       onTouchStart={(e) => handleTouchStartResize(e, el, 's')}
-                      className="absolute -bottom-2 left-1/2 -translate-x-1/2 sm:-bottom-1.5 w-4 h-4 sm:w-3 sm:h-3 bg-white border-2 border-blue-600 rounded-full cursor-ns-resize z-40 hover:scale-125 transition-transform shadow-xs"
+                      className="absolute -bottom-3 left-1/2 -translate-x-1/2 sm:-bottom-1.5 w-6 h-6 sm:w-3.5 sm:h-3.5 bg-white border-2 border-blue-600 rounded-full cursor-ns-resize z-40 hover:scale-125 transition-transform shadow-md touch-none flex items-center justify-center"
                       title="Kéo giãn chiều cao (dưới)"
-                    />
+                    >
+                      <span className="w-1.5 h-1.5 rounded-full bg-blue-600 sm:hidden" />
+                    </div>
                     <div
                       onMouseDown={(e) => handleMouseDownResize(e, el, 'w')}
                       onTouchStart={(e) => handleTouchStartResize(e, el, 'w')}
-                      className="absolute top-1/2 -translate-y-1/2 -left-2 sm:-left-1.5 w-4 h-4 sm:w-3 sm:h-3 bg-white border-2 border-blue-600 rounded-full cursor-ew-resize z-40 hover:scale-125 transition-transform shadow-xs"
+                      className="absolute top-1/2 -translate-y-1/2 -left-3 sm:-left-1.5 w-6 h-6 sm:w-3.5 sm:h-3.5 bg-white border-2 border-blue-600 rounded-full cursor-ew-resize z-40 hover:scale-125 transition-transform shadow-md touch-none flex items-center justify-center"
                       title="Kéo giãn chiều rộng (trái)"
-                    />
+                    >
+                      <span className="w-1.5 h-1.5 rounded-full bg-blue-600 sm:hidden" />
+                    </div>
                     <div
                       onMouseDown={(e) => handleMouseDownResize(e, el, 'e')}
                       onTouchStart={(e) => handleTouchStartResize(e, el, 'e')}
-                      className="absolute top-1/2 -translate-y-1/2 -right-2 sm:-right-1.5 w-4 h-4 sm:w-3 sm:h-3 bg-white border-2 border-blue-600 rounded-full cursor-ew-resize z-40 hover:scale-125 transition-transform shadow-xs"
+                      className="absolute top-1/2 -translate-y-1/2 -right-3 sm:-right-1.5 w-6 h-6 sm:w-3.5 sm:h-3.5 bg-white border-2 border-blue-600 rounded-full cursor-ew-resize z-40 hover:scale-125 transition-transform shadow-md touch-none flex items-center justify-center"
                       title="Kéo giãn chiều rộng (phải)"
-                    />
+                    >
+                      <span className="w-1.5 h-1.5 rounded-full bg-blue-600 sm:hidden" />
+                    </div>
                   </>
                 )}
               </div>
@@ -1767,8 +1871,8 @@ export const CanvasEditor: React.FC<CanvasEditorProps> = ({
         const editingEl = elements.find((e) => e.id === editingTextId);
         if (!editingEl || editingEl.type !== 'text') return null;
 
-        const varMatch = (editingEl.content || '').match(/\{\{\s*([a-zA-Z0-9_]+)(?:\s*\|\s*[a-zA-Z0-9_]+)?\s*\}\}/);
-        const linkedVar = varMatch ? varMatch[1] : null;
+        const varMatch = (editingEl.content || '').match(/\{\{\s*([^{}|]+?)(?:\s*\|\s*[a-zA-Z0-9_]+)?\s*\}\}/);
+        const linkedVar = varMatch ? varMatch[1].trim() : null;
         const isVarMode = Boolean(linkedVar && previewVariables && onUpdateDatasetValue);
         const currentValue = isVarMode
           ? String(sampleDataRow[linkedVar!] ?? '')
@@ -1864,6 +1968,25 @@ export const CanvasEditor: React.FC<CanvasEditorProps> = ({
                     fontStyle: editingEl.fontStyle || 'normal',
                   }}
                 />
+
+                {isVarMode && (
+                  <div className="mt-3 pt-2 border-t border-slate-100 dark:border-slate-800">
+                    <label className="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-1">
+                      Công thức mã biến (Template):
+                    </label>
+                    <input
+                      type="text"
+                      value={editingEl.content}
+                      onChange={(e) => {
+                        onUpdateElement({
+                          ...editingEl,
+                          content: e.target.value,
+                        });
+                      }}
+                      className="w-full bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-mono"
+                    />
+                  </div>
+                )}
               </div>
 
               {/* Modal Footer */}

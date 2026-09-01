@@ -39,14 +39,16 @@ export async function generateBulkLabelsAsync(options: BulkGeneratorOptions): Pr
             const evenIndex = oddIndex + 1;
 
             const rowOdd = dataset[oddIndex];
-            const rowEven = evenIndex < total ? dataset[evenIndex] : {};
+            const hasEven = evenIndex < total;
+            const rowEven = hasEven ? dataset[evenIndex] : { _isEmpty: true };
 
             const pairedData = {
               ...rowOdd,
               _oddRow: rowOdd,
               _evenRow: rowEven,
+              _isEvenEmpty: !hasEven,
               _oddIndex: oddIndex + 1,
-              _evenIndex: evenIndex < total ? evenIndex + 1 : null,
+              _evenIndex: hasEven ? evenIndex + 1 : null,
             };
 
             let previewDataUrl: string | undefined = undefined;

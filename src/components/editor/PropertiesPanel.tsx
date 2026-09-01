@@ -14,6 +14,12 @@ import {
 } from '../../types/label';
 import { substituteVariables } from '../../utils/excelHelper';
 import {
+  shrinkFontSizeToFitLine,
+  expandHeightToFitContent,
+  expandWidthToFitSingleLine,
+  isTextOverflowing,
+} from '../../utils/textFitHelper';
+import {
   AlignLeft,
   AlignCenter,
   AlignRight,
@@ -32,6 +38,11 @@ import {
   Layers,
   FileText,
   CheckCircle2,
+  Scaling,
+  MoveVertical,
+  MoveHorizontal,
+  AlertTriangle,
+  Zap,
 } from 'lucide-react';
 
 interface PropertiesPanelProps {
@@ -397,12 +408,76 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
       {selectedElement.type === 'text' && (() => {
         const textEl = selectedElement as TextElement;
         const rawContent = textEl.content || '';
-        const varMatch = rawContent.match(/\{\{\s*([a-zA-Z0-9_]+)(?:\s*\|\s*[a-zA-Z0-9_]+)?\s*\}\}/);
-        const linkedVar = varMatch ? varMatch[1] : null;
+        const varMatch = rawContent.match(/\{\{\s*([^{}|]+?)(?:\s*\|\s*[a-zA-Z0-9_]+)?\s*\}\}/);
+        const linkedVar = varMatch ? varMatch[1].trim() : null;
         const currentDataValue = linkedVar && sampleDataRow ? (sampleDataRow[linkedVar] ?? '') : '';
+        const overflowing = isTextOverflowing(textEl, sampleDataRow);
 
         return (
           <div className="space-y-3 pt-2 border-t border-slate-200 dark:border-slate-800">
+            {/* Auto Overflow Fix Tool Box */}
+            <div className={`p-2.5 rounded-xl border space-y-2 transition-all ${
+              overflowing
+                ? 'bg-amber-50 dark:bg-amber-950/40 border-amber-300 dark:border-amber-700/80 shadow-md ring-2 ring-amber-400/30'
+                : 'bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700'
+            }`}>
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                  <Zap className="w-3.5 h-3.5 text-amber-500 fill-amber-400" />
+                  <span>Sửa Nhanh Lỗi Mất Chữ / Tràn Dòng</span>
+                </span>
+                {overflowing && (
+                  <span className="text-[9px] font-bold bg-amber-500 text-white px-1.5 py-0.5 rounded-full flex items-center gap-0.5 animate-pulse">
+                    <AlertTriangle className="w-2.5 h-2.5" />
+                    Bị Mất Chữ
+                  </span>
+                )}
+              </div>
+
+              {overflowing && (
+                <p className="text-[10px] text-amber-800 dark:text-amber-300 leading-tight">
+                  ⚠️ Khung chữ quá ngắn so với số dòng text nên dòng 2 bị che đè. Hãy bấm 1 trong các nút sửa tự động dưới đây:
+                </p>
+              )}
+
+              <div className="grid grid-cols-1 gap-1.5 pt-0.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const updated = shrinkFontSizeToFitLine(textEl, sampleDataRow);
+                    onUpdateElement(updated);
+                  }}
+                  className="w-full px-2.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+                >
+                  <Scaling className="w-3.5 h-3.5 shrink-0" />
+                  <span>⚡ Co Cỡ Chữ Vừa 1 Hàng</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const updated = expandHeightToFitContent(textEl, sampleDataRow);
+                    onUpdateElement(updated);
+                  }}
+                  className="w-full px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+                >
+                  <MoveVertical className="w-3.5 h-3.5 shrink-0" />
+                  <span>📐 Tự Động Giãn Chiều Cao (Hiện Đủ Dòng)</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const updated = expandWidthToFitSingleLine(textEl, sampleDataRow);
+                    onUpdateElement(updated);
+                  }}
+                  className="w-full px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+                >
+                  <MoveHorizontal className="w-3.5 h-3.5 shrink-0" />
+                  <span>↔️ Tự Động Mở Rộng Chiều Rộng</span>
+                </button>
+              </div>
+            </div>
             {linkedVar ? (
               <div className="bg-blue-50/80 dark:bg-blue-950/50 p-2.5 rounded-xl border border-blue-200 dark:border-blue-800/80 space-y-2">
                 <div className="flex items-center justify-between">

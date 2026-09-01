@@ -141,33 +141,36 @@ export const UpdateManagerModal: React.FC<UpdateManagerModalProps> = ({ isOpen, 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
-      <div className="relative w-full max-w-lg bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-950/75 dark:bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+      <div className="relative w-full max-w-lg bg-white/95 dark:bg-slate-900/95 backdrop-blur-2xl rounded-t-[28px] sm:rounded-3xl shadow-2xl shadow-black/30 border-t sm:border border-slate-200/80 dark:border-slate-800/80 overflow-hidden flex flex-col max-h-[92dvh] sm:max-h-[85vh]">
+        {/* Mobile Pull Handle Bar */}
+        <div className="sm:hidden w-12 h-1.5 bg-slate-300 dark:bg-slate-700 rounded-full mx-auto my-2.5 shrink-0" />
+
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-blue-500/10 dark:bg-blue-400/10 text-blue-600 dark:text-blue-400 flex items-center justify-center">
+        <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 sm:py-4 border-b border-slate-100/80 dark:border-slate-800 bg-slate-50/90 dark:bg-slate-900 backdrop-blur-sm shrink-0">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="p-2 sm:p-2.5 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-md shadow-blue-500/20 shrink-0">
               <Sparkles className="w-5 h-5" />
             </div>
-            <div>
-              <h3 className="text-base font-bold text-slate-800 dark:text-slate-100">
+            <div className="min-w-0">
+              <h3 className="text-sm sm:text-base font-bold text-slate-800 dark:text-slate-100 truncate">
                 Cập Nhật Tự Động EXE
               </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
+              <p className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400 truncate">
                 QR Label Pro Version {currentVersion}
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            className="p-1.5 sm:p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-200/60 dark:hover:bg-slate-700/60 transition-colors shrink-0"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Content */}
-        <div className="p-6 space-y-5 overflow-y-auto max-h-[75vh]">
+        <div className="p-4 sm:p-6 space-y-4 sm:space-y-5 overflow-y-auto max-h-[75vh]">
           {/* Main Status Display */}
           <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 flex flex-col items-center text-center">
             {status === 'idle' && (

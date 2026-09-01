@@ -39,7 +39,7 @@ export async function renderLabelToCanvas(
     const isTop = el.id.startsWith('top-') || (el.y + el.height / 2 < template.heightMm / 2);
 
     if (dataRow._oddRow || dataRow._evenRow) {
-      return isTop ? (dataRow._oddRow || dataRow) : (dataRow._evenRow || {});
+      return isTop ? (dataRow._oddRow || dataRow) : (dataRow._evenRow || { _isEmpty: true });
     }
     if (dataRow._sampleOdd || dataRow._sampleEven) {
       return isTop ? (dataRow._sampleOdd || dataRow) : (dataRow._sampleEven || dataRow);
@@ -163,33 +163,37 @@ export async function renderLabelToCanvas(
       }
     } else if (el.type === 'qr') {
       const substitutedContent = substituteVariables(el.content, elDataRow);
-      const qrDataUrl = await generateQRDataUrl({
-        content: substitutedContent,
-        fgColor: el.fgColor,
-        bgColor: el.bgColor,
-        errorCorrection: el.errorCorrection,
-        logoUrl: el.logoUrl,
-        logoSizeRatio: el.logoSizeRatio,
-        width: Math.max(200, Math.round(w)),
-      });
+      if (substitutedContent && substitutedContent.trim() && !elDataRow._isEmpty) {
+        const qrDataUrl = await generateQRDataUrl({
+          content: substitutedContent,
+          fgColor: el.fgColor,
+          bgColor: el.bgColor,
+          errorCorrection: el.errorCorrection,
+          logoUrl: el.logoUrl,
+          logoSizeRatio: el.logoSizeRatio,
+          width: Math.max(200, Math.round(w)),
+        });
 
-      const img = await loadImage(qrDataUrl);
-      ctx.drawImage(img, x, y, w, h);
+        const img = await loadImage(qrDataUrl);
+        ctx.drawImage(img, x, y, w, h);
+      }
     } else if (el.type === 'barcode') {
       const substitutedContent = substituteVariables(el.content, elDataRow);
-      const barcodeDataUrl = generateBarcodeDataUrl({
-        content: substitutedContent,
-        format: el.format,
-        fgColor: el.fgColor,
-        bgColor: el.bgColor,
-        displayValue: el.displayValue,
-        fontSize: el.fontSize,
-        fontFamily: el.fontFamily,
-        height: Math.max(50, Math.round(h * 2)),
-      });
+      if (substitutedContent && substitutedContent.trim() && !elDataRow._isEmpty) {
+        const barcodeDataUrl = generateBarcodeDataUrl({
+          content: substitutedContent,
+          format: el.format,
+          fgColor: el.fgColor,
+          bgColor: el.bgColor,
+          displayValue: el.displayValue,
+          fontSize: el.fontSize,
+          fontFamily: el.fontFamily,
+          height: Math.max(50, Math.round(h * 2)),
+        });
 
-      const img = await loadImage(barcodeDataUrl);
-      ctx.drawImage(img, x, y, w, h);
+        const img = await loadImage(barcodeDataUrl);
+        ctx.drawImage(img, x, y, w, h);
+      }
     } else if (el.type === 'image' && el.src) {
       try {
         const img = await loadImage(el.src);

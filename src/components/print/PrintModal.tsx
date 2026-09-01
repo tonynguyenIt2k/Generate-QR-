@@ -535,42 +535,45 @@ export const PrintModal: React.FC<PrintModalProps> = ({
   const currentPreviewList = printableList.slice(startIndex, startIndex + labelsPerPage);
 
   return (
-    <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 z-50 animate-fade-in">
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl w-full max-w-6xl overflow-hidden flex flex-col h-[92vh]">
+    <div className="fixed inset-0 bg-slate-950/75 dark:bg-black/80 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-3 md:p-4 z-50 animate-fade-in">
+      <div className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-2xl border-t sm:border border-slate-200/80 dark:border-slate-800/80 rounded-t-[28px] sm:rounded-3xl shadow-2xl shadow-black/30 w-full max-w-6xl overflow-hidden flex flex-col h-[100dvh] sm:h-[92vh] max-h-[100dvh]">
+        {/* Mobile Pull Handle Bar */}
+        <div className="sm:hidden w-12 h-1.5 bg-slate-300 dark:bg-slate-700 rounded-full mx-auto my-2 shrink-0" />
+
         {/* Top Header */}
-        <div className="px-3 sm:px-5 py-3 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-800/60 gap-2 shrink-0">
-          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-            <div className="p-2 bg-blue-600 text-white rounded-xl shadow-md shadow-blue-500/20 shrink-0">
+        <div className="px-3.5 sm:px-5 py-2.5 sm:py-3 border-b border-slate-200/80 dark:border-slate-800/80 flex items-center justify-between bg-slate-50/90 dark:bg-slate-900 backdrop-blur-sm gap-2 shrink-0">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
+            <div className="p-2 sm:p-2.5 bg-gradient-to-br from-blue-500 to-indigo-600 text-white rounded-2xl shadow-md shadow-blue-500/20 shrink-0">
               <Printer className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <h2 className="text-xs sm:text-base font-bold text-slate-900 dark:text-slate-100 truncate">
-                Cấu Hình & Xem Trước Khi In
+                Cấu Hình & Xem Trước
               </h2>
               <p className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400 truncate">
-                Mẫu: <span className="font-semibold text-slate-800 dark:text-slate-200">{template.name}</span> ({template.widthMm}x{template.heightMm}mm) — <span className="font-bold text-blue-600">{printableList.length}</span> tem
+                <span className="font-semibold text-slate-800 dark:text-slate-200">{template.name}</span> ({template.widthMm}x{template.heightMm}mm) · <span className="font-bold text-blue-600 dark:text-blue-400">{printableList.length}</span> tem
               </p>
             </div>
           </div>
 
           {/* Mobile Tab Switcher */}
-          <div className="flex md:hidden items-center bg-slate-200 dark:bg-slate-700 p-1 rounded-xl text-xs font-semibold shrink-0">
+          <div className="flex md:hidden items-center bg-slate-200/80 dark:bg-slate-800 p-0.5 rounded-xl text-xs font-semibold shrink-0">
             <button
               onClick={() => setActiveTab('preview')}
-              className={`px-2.5 py-1 rounded-lg transition-all whitespace-nowrap ${
+              className={`px-2.5 py-1 rounded-lg transition-all text-[11px] whitespace-nowrap cursor-pointer ${
                 activeTab === 'preview'
-                  ? 'bg-white dark:bg-slate-900 text-blue-600 shadow-xs'
-                  : 'text-slate-600 dark:text-slate-300'
+                  ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-xs font-bold'
+                  : 'text-slate-600 dark:text-slate-400'
               }`}
             >
               Xem Trước
             </button>
             <button
               onClick={() => setActiveTab('settings')}
-              className={`px-2.5 py-1 rounded-lg transition-all whitespace-nowrap ${
+              className={`px-2.5 py-1 rounded-lg transition-all text-[11px] whitespace-nowrap cursor-pointer ${
                 activeTab === 'settings'
-                  ? 'bg-white dark:bg-slate-900 text-blue-600 shadow-xs'
-                  : 'text-slate-600 dark:text-slate-300'
+                  ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-xs font-bold'
+                  : 'text-slate-600 dark:text-slate-400'
               }`}
             >
               Cài Đặt
@@ -579,7 +582,7 @@ export const PrintModal: React.FC<PrintModalProps> = ({
 
           <button
             onClick={onClose}
-            className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-200/60 dark:hover:bg-slate-700/60 cursor-pointer shrink-0"
+            className="p-1.5 sm:p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-200/60 dark:hover:bg-slate-700/60 cursor-pointer shrink-0"
             title="Đóng"
           >
             <X className="w-5 h-5" />
@@ -590,7 +593,7 @@ export const PrintModal: React.FC<PrintModalProps> = ({
         <div className="flex-1 overflow-hidden flex flex-col md:flex-row">
           {/* Left Panel: Settings Controls */}
           <div
-            className={`w-full md:w-80 lg:w-96 border-r border-slate-200 dark:border-slate-800 p-4 overflow-y-auto space-y-4 bg-slate-50/50 dark:bg-slate-900/40 text-xs ${
+            className={`w-full md:w-80 lg:w-96 border-r border-slate-200 dark:border-slate-800 p-3 sm:p-4 overflow-y-auto space-y-3.5 bg-slate-50/50 dark:bg-slate-900/40 text-xs ${
               activeTab === 'settings' ? 'block' : 'hidden md:block'
             }`}
           >
@@ -685,7 +688,7 @@ export const PrintModal: React.FC<PrintModalProps> = ({
             </div>
 
             {/* Summary Box */}
-            <div className="p-3.5 bg-blue-50/80 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-800/80 rounded-xl space-y-2">
+            <div className="p-3.5 bg-blue-50/80 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-800/80 rounded-xl space-y-1.5">
               <div className="flex items-center gap-2 text-blue-900 dark:text-blue-200 font-bold">
                 <FileCheck className="w-4 h-4 text-blue-600" />
                 <span>Thống Kê Bản In</span>
@@ -698,26 +701,23 @@ export const PrintModal: React.FC<PrintModalProps> = ({
             </div>
 
             {/* Thermal Printer Config Advice Box */}
-            <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 rounded-xl text-[11px] space-y-2 text-amber-900 dark:text-amber-200">
-              <div className="font-bold flex items-center gap-1.5 text-amber-800 dark:text-amber-300 text-[12px]">
+            <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 rounded-xl text-[11px] space-y-1.5 text-amber-900 dark:text-amber-200">
+              <div className="font-bold flex items-center gap-1.5 text-amber-800 dark:text-amber-300 text-[11.5px]">
                 <span className="text-sm">📌</span>
-                <span>Mẹo Cố Định Khổ Tem "USER (3.17 x 1.18 in)" Vĩnh Viễn Trên Windows</span>
+                <span>Cố Định Khổ Tem Chuẩn Trên Máy In Nhiệt</span>
               </div>
               <ul className="list-disc pl-4 space-y-1 text-[10.5px] leading-relaxed text-amber-900/90 dark:text-amber-200/90">
                 <li>
-                  <b>Để không bị nhảy về 4x6 inch:</b> Vào <b>Control Panel</b> → <b>Devices and Printers</b> → Click chuột phải vào <b>Máy In Nhiệt</b> → Chọn <b>Printer Properties</b> → Tab <b>Advanced</b> → Bấm <b>Printing Defaults...</b>
+                  <b>Để không bị lệch khổ:</b> Trong cài đặt máy in, chọn khổ <b>USER ({((template.widthMm * printSettings.labelsPerRow + printSettings.gapMm * (printSettings.labelsPerRow - 1)) / 25.4).toFixed(2)} x {(template.heightMm / 25.4).toFixed(2)} in)</b>.
                 </li>
                 <li>
-                  Tại ô <b>Stock Name</b>: Chọn chính xác <b>USER (3.17 in x 1.18 in)</b> hoặc <b>intem</b> rồi bấm <b>Apply → OK</b>. Từ sau Windows sẽ mặc định luôn khổ này.
-                </li>
-                <li>
-                  <b>Lề trình duyệt (Margins):</b> Chọn <b>Margins = None (Không lề)</b>, <b>Scale = 100%</b> trong Chrome/Edge.
+                  <b>Lề trình duyệt:</b> Chọn <b>Margins = None (Không lề)</b>, <b>Scale = 100%</b>.
                 </li>
               </ul>
             </div>
 
-            {/* Actions in Left Panel for quick access */}
-            <div className="pt-2 space-y-2">
+            {/* Actions in Left Panel */}
+            <div className="pt-1 space-y-2">
               <button
                 type="button"
                 onClick={handleSavePrinterSettings}
@@ -725,24 +725,6 @@ export const PrintModal: React.FC<PrintModalProps> = ({
               >
                 <Save className="w-4 h-4" />
                 <span>Lưu Cấu Hình Mặc Định</span>
-              </button>
-
-              <button
-                onClick={() => handleDirectBrowserPrint(false)}
-                disabled={isPrintingDirect || printableList.length === 0}
-                className="w-full py-3 px-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 disabled:opacity-50 text-white font-bold rounded-xl shadow-lg shadow-blue-500/30 transition-all flex items-center justify-center gap-2 cursor-pointer text-xs ring-2 ring-blue-400/40 active:scale-95"
-              >
-                <Zap className="w-4 h-4 text-amber-300 fill-amber-300 animate-bounce" />
-                <span>{isPrintingDirect ? 'Đang gửi bản in...' : 'IN NGAY TRỰC TIẾP (1-CLICK)'}</span>
-              </button>
-
-              <button
-                onClick={handleDownloadPdf}
-                disabled={exportingPdf || printableList.length === 0}
-                className="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold rounded-xl shadow-md shadow-emerald-500/20 transition-all flex items-center justify-center gap-2 cursor-pointer text-xs"
-              >
-                <Download className="w-4 h-4" />
-                <span>Xuất PDF Cho Máy In Nhiệt</span>
               </button>
             </div>
           </div>
@@ -754,51 +736,52 @@ export const PrintModal: React.FC<PrintModalProps> = ({
             }`}
           >
             {/* Toolbar for Preview */}
-            <div className="px-4 py-2.5 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs flex-wrap gap-2">
-              <div className="flex items-center gap-2">
-                <span className="font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1">
+            <div className="px-3 sm:px-4 py-2 sm:py-2.5 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs gap-2 shrink-0">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1 shrink-0">
                   <Eye className="w-4 h-4 text-blue-600" />
-                  <span>Xem Trước Bản In Live</span>
+                  <span className="hidden sm:inline">Xem Trước Bản In Live</span>
+                  <span className="sm:hidden">Xem Trước</span>
                 </span>
                 {isRenderingPreviews && (
-                  <span className="flex items-center gap-1 text-[11px] text-blue-600 animate-pulse">
-                    <RefreshCw className="w-3 h-3 animate-spin" /> Đang tạo ảnh tem...
+                  <span className="flex items-center gap-1 text-[10px] sm:text-[11px] text-blue-600 animate-pulse truncate">
+                    <RefreshCw className="w-3 h-3 animate-spin shrink-0" /> Tạo ảnh...
                   </span>
                 )}
               </div>
 
               {/* View Mode & Zoom & Pagination */}
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
                 {/* View Mode Toggle */}
-                <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
+                <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-0.5 sm:p-1 rounded-xl">
                   <button
                     onClick={() => setViewMode('roll')}
-                    className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold flex items-center gap-1 cursor-pointer ${
+                    className={`px-2 sm:px-2.5 py-1 rounded-lg text-[10px] sm:text-[11px] font-semibold flex items-center gap-1 cursor-pointer ${
                       viewMode === 'roll'
                         ? 'bg-white dark:bg-slate-700 text-blue-600 shadow-xs'
                         : 'text-slate-500'
                     }`}
                     title="Xem cuộn giấy in"
                   >
-                    <Grid className="w-3.5 h-3.5" />
+                    <Grid className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
                     <span>Cuộn In</span>
                   </button>
                   <button
                     onClick={() => setViewMode('single')}
-                    className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold flex items-center gap-1 cursor-pointer ${
+                    className={`px-2 sm:px-2.5 py-1 rounded-lg text-[10px] sm:text-[11px] font-semibold flex items-center gap-1 cursor-pointer ${
                       viewMode === 'single'
                         ? 'bg-white dark:bg-slate-700 text-blue-600 shadow-xs'
                         : 'text-slate-500'
                     }`}
                     title="Xem chi tiết từng tem"
                   >
-                    <Square className="w-3.5 h-3.5" />
+                    <Square className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
                     <span>Từng Tem</span>
                   </button>
                 </div>
 
                 {/* Zoom controls */}
-                <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
+                <div className="flex items-center gap-0.5 sm:gap-1 bg-slate-100 dark:bg-slate-800 p-0.5 sm:p-1 rounded-xl">
                   <button
                     onClick={() => setPreviewZoom((z) => Math.max(0.4, z - 0.2))}
                     className="p-1 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-md cursor-pointer"
@@ -806,7 +789,7 @@ export const PrintModal: React.FC<PrintModalProps> = ({
                   >
                     <ZoomOut className="w-3.5 h-3.5" />
                   </button>
-                  <span className="text-[11px] font-bold w-12 text-center text-slate-700 dark:text-slate-300">
+                  <span className="text-[10px] sm:text-[11px] font-bold w-9 sm:w-12 text-center text-slate-700 dark:text-slate-300">
                     {Math.round(previewZoom * 100)}%
                   </span>
                   <button
@@ -818,7 +801,7 @@ export const PrintModal: React.FC<PrintModalProps> = ({
                   </button>
                   <button
                     onClick={() => setPreviewZoom(1)}
-                    className="px-1.5 text-[10px] font-semibold text-blue-600 hover:underline cursor-pointer"
+                    className="hidden sm:inline px-1.5 text-[10px] font-semibold text-blue-600 hover:underline cursor-pointer"
                   >
                     Reset
                   </button>
@@ -826,23 +809,23 @@ export const PrintModal: React.FC<PrintModalProps> = ({
 
                 {/* Pagination Controls */}
                 {totalPages > 1 && (
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-1">
                     <button
                       onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                       disabled={currentPage === 1}
                       className="p-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 disabled:opacity-40 rounded-lg cursor-pointer"
                     >
-                      <ChevronLeft className="w-4 h-4" />
+                      <ChevronLeft className="w-3.5 h-3.5" />
                     </button>
-                    <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
-                      Trang {currentPage} / {totalPages}
+                    <span className="text-[10px] sm:text-[11px] font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">
+                      {currentPage}/{totalPages}
                     </span>
                     <button
                       onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                       disabled={currentPage === totalPages}
                       className="p-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 disabled:opacity-40 rounded-lg cursor-pointer"
                     >
-                      <ChevronRight className="w-4 h-4" />
+                      <ChevronRight className="w-3.5 h-3.5" />
                     </button>
                   </div>
                 )}
@@ -850,31 +833,31 @@ export const PrintModal: React.FC<PrintModalProps> = ({
             </div>
 
             {/* Preview Sheet Area */}
-            <div className="flex-1 overflow-auto p-6 flex justify-center items-start bg-slate-200/70 dark:bg-slate-950/80">
+            <div className="flex-1 overflow-auto p-3 sm:p-6 flex justify-center items-start bg-slate-200/70 dark:bg-slate-950/80">
               {printableList.length === 0 ? (
-                <div className="my-auto text-center p-8 bg-white dark:bg-slate-900 rounded-2xl shadow-md border border-slate-200 dark:border-slate-800 max-w-md">
-                  <Printer className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-                  <p className="font-bold text-slate-800 dark:text-slate-200 text-sm">Chưa chọn tem nào để in</p>
-                  <p className="text-slate-500 text-xs mt-1">
+                <div className="my-auto text-center p-6 sm:p-8 bg-white dark:bg-slate-900 rounded-2xl shadow-md border border-slate-200 dark:border-slate-800 max-w-md mx-4">
+                  <Printer className="w-10 h-10 sm:w-12 sm:h-12 text-slate-300 mx-auto mb-3" />
+                  <p className="font-bold text-slate-800 dark:text-slate-200 text-xs sm:text-sm">Chưa chọn tem nào để in</p>
+                  <p className="text-slate-500 text-[11px] sm:text-xs mt-1">
                     Vui lòng chọn ít nhất 1 dòng trong danh sách dữ liệu để hiển thị bản in.
                   </p>
                 </div>
               ) : viewMode === 'roll' ? (
                 /* Roll/Sheet View */
                 <div
-                  className="bg-white dark:bg-slate-900 border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-xl shadow-2xl p-6 transition-all duration-200 relative min-h-[300px]"
+                  className="bg-white dark:bg-slate-900 border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-xl shadow-2xl p-4 sm:p-6 transition-all duration-200 relative min-h-[250px]"
                   style={{
                     transform: `scale(${previewZoom})`,
                     transformOrigin: 'top center',
                   }}
                 >
-                  <div className="absolute top-2 left-3 text-[10px] text-slate-400 font-mono font-bold uppercase tracking-wider">
+                  <div className="absolute top-2 left-3 text-[9px] sm:text-[10px] text-slate-400 font-mono font-bold uppercase tracking-wider">
                     Cuộn Giấy In Nhiệt ({template.widthMm * printSettings.labelsPerRow + printSettings.gapMm * (printSettings.labelsPerRow - 1)} mm x {template.heightMm} mm)
                   </div>
 
                   {/* Grid Layout of Labels on paper */}
                   <div
-                    className="grid gap-y-4 gap-x-3 mt-6"
+                    className="grid gap-y-3 sm:gap-y-4 gap-x-2 sm:gap-x-3 mt-5"
                     style={{
                       gridTemplateColumns: `repeat(${printSettings.labelsPerRow}, minmax(0, 1fr))`,
                     }}
@@ -921,7 +904,7 @@ export const PrintModal: React.FC<PrintModalProps> = ({
               ) : (
                 /* Single Label Focus View */
                 <div
-                  className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-2xl shadow-2xl p-8 flex flex-col items-center gap-4 transition-all"
+                  className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-2xl shadow-2xl p-4 sm:p-8 flex flex-col items-center gap-3 sm:gap-4 transition-all max-w-full"
                   style={{
                     transform: `scale(${previewZoom})`,
                     transformOrigin: 'top center',
@@ -936,8 +919,8 @@ export const PrintModal: React.FC<PrintModalProps> = ({
                     <div
                       className="border-2 border-blue-500 rounded-lg shadow-lg overflow-hidden bg-white p-2"
                       style={{
-                        width: `${template.widthMm * 4.5}px`,
-                        height: `${template.heightMm * 4.5}px`,
+                        width: `${Math.min(template.widthMm * 4.5, 300)}px`,
+                        height: `${Math.min(template.heightMm * 4.5, 300)}px`,
                       }}
                     >
                       {renderedThumbnails[currentPreviewList[0].labelId] ? (
@@ -956,14 +939,14 @@ export const PrintModal: React.FC<PrintModalProps> = ({
 
                   {/* Sample Data Details */}
                   {currentPreviewList[0] && (
-                    <div className="w-full max-w-sm p-3 bg-slate-50 dark:bg-slate-800/80 rounded-xl border border-slate-200 dark:border-slate-700 text-[11px] space-y-1">
+                    <div className="w-full max-w-sm p-2.5 sm:p-3 bg-slate-50 dark:bg-slate-800/80 rounded-xl border border-slate-200 dark:border-slate-700 text-[11px] space-y-1">
                       <p className="font-bold text-slate-800 dark:text-slate-200 border-b pb-1 mb-1">
                         Dữ Liệu Được Điền Vào Tem:
                       </p>
                       {Object.entries(currentPreviewList[0].data).map(([k, v]) => (
                         <div key={k} className="flex justify-between text-slate-600 dark:text-slate-300">
                           <span className="font-medium text-slate-500">{k}:</span>
-                          <span className="font-bold text-slate-800 dark:text-slate-100">{String(v || '-')}</span>
+                          <span className="font-bold text-slate-800 dark:text-slate-100 truncate ml-2">{String(v || '-')}</span>
                         </div>
                       ))}
                     </div>
@@ -976,7 +959,7 @@ export const PrintModal: React.FC<PrintModalProps> = ({
 
         {/* Progress Overlay */}
         {exportingPdf && (
-          <div className="px-6 py-3 bg-emerald-50 dark:bg-emerald-950/80 border-t border-emerald-200 dark:border-emerald-800 flex items-center justify-between text-xs font-bold text-emerald-800 dark:text-emerald-200">
+          <div className="px-4 sm:px-6 py-2.5 bg-emerald-50 dark:bg-emerald-950/80 border-t border-emerald-200 dark:border-emerald-800 flex items-center justify-between text-xs font-bold text-emerald-800 dark:text-emerald-200">
             <span className="flex items-center gap-2">
               <RefreshCw className="w-4 h-4 animate-spin text-emerald-600" />
               Đang kết xuất Vector PDF chuẩn in nhiệt...
@@ -987,42 +970,39 @@ export const PrintModal: React.FC<PrintModalProps> = ({
           </div>
         )}
 
-        {/* Footer */}
-        <div className="p-3 sm:p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 flex flex-wrap sm:flex-nowrap items-center justify-between gap-2 shrink-0">
-          <button
-            onClick={onClose}
-            className="px-3 sm:px-4 py-2 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-100 font-semibold rounded-xl cursor-pointer text-xs whitespace-nowrap shrink-0"
-          >
-            Đóng / Quay Lại
-          </button>
-
-          <div className="flex items-center gap-2 sm:gap-3 overflow-x-auto no-scrollbar shrink-0">
+        {/* Footer: Responsive Mobile & Desktop Layout */}
+        <div className="p-2.5 sm:p-4 border-t border-slate-200/80 dark:border-slate-800 bg-slate-50/95 dark:bg-slate-900 backdrop-blur-md flex items-center justify-between gap-2.5 shrink-0">
+          {/* 3 Optimized Action Buttons */}
+          <div className="grid grid-cols-3 sm:flex sm:items-center sm:justify-end gap-2 sm:gap-3 w-full">
             <button
               onClick={() => handleDirectBrowserPrint(true)}
               disabled={isPrintingDirect || printableList.length === 0}
-              className="flex items-center gap-1.5 px-3 py-2 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 disabled:opacity-50 text-slate-800 dark:text-slate-100 font-semibold rounded-xl transition-all cursor-pointer text-xs whitespace-nowrap shrink-0"
-              title="Mở bản in ở tab mới (nếu muốn xem dạng trang web riêng)"
+              className="flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 h-11 bg-slate-200/90 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 disabled:opacity-50 text-slate-800 dark:text-slate-100 font-bold rounded-2xl transition-all cursor-pointer text-xs sm:text-sm text-center shadow-xs active:scale-[0.98] border border-transparent dark:border-slate-700"
+              title="Mở bản in ở tab mới"
             >
-              <ExternalLink className="w-3.5 h-3.5 shrink-0" />
-              <span>Mở Tab In</span>
+              <ExternalLink className="w-4 h-4 shrink-0 text-slate-600 dark:text-slate-300" />
+              <span className="hidden sm:inline">Mở Tab In</span>
+              <span className="sm:hidden">Tab In</span>
             </button>
 
             <button
               onClick={handleDownloadPdf}
               disabled={exportingPdf || printableList.length === 0}
-              className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold rounded-xl shadow-md shadow-emerald-500/20 transition-all cursor-pointer text-xs whitespace-nowrap shrink-0"
+              className="flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-5 h-11 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 disabled:opacity-50 text-white font-bold rounded-2xl shadow-md shadow-emerald-500/20 transition-all cursor-pointer text-xs sm:text-sm text-center active:scale-[0.98]"
             >
               <Download className="w-4 h-4 shrink-0" />
-              <span>Xuất File PDF</span>
+              <span className="hidden sm:inline">Xuất File PDF</span>
+              <span className="sm:hidden">File PDF</span>
             </button>
 
             <button
               onClick={() => handleDirectBrowserPrint(false)}
               disabled={isPrintingDirect || printableList.length === 0}
-              className="flex items-center gap-1.5 sm:gap-2 px-3.5 sm:px-5 py-2 sm:py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 disabled:opacity-50 text-white font-bold rounded-xl shadow-lg shadow-blue-500/25 transition-all cursor-pointer text-xs ring-2 ring-blue-400/40 active:scale-95 whitespace-nowrap shrink-0"
+              className="flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-6 h-11 bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 hover:from-blue-700 hover:to-indigo-700 disabled:opacity-50 text-white font-black rounded-2xl shadow-lg shadow-indigo-500/25 transition-all cursor-pointer text-xs sm:text-sm ring-2 ring-blue-400/40 active:scale-[0.98] text-center whitespace-nowrap"
             >
               <Zap className="w-4 h-4 text-amber-300 fill-amber-300 animate-pulse shrink-0" />
-              <span>{isPrintingDirect ? 'Đang gửi...' : 'IN NGAY TRỰC TIẾP'}</span>
+              <span className="hidden sm:inline">{isPrintingDirect ? 'Đang gửi...' : 'IN NGAY TRỰC TIẾP'}</span>
+              <span className="sm:hidden">{isPrintingDirect ? 'Đang in...' : 'IN NGAY'}</span>
             </button>
           </div>
         </div>
