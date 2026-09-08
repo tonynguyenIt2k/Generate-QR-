@@ -4,13 +4,18 @@ import { generateQRDataUrl } from './qrGenerator';
 import { generateBarcodeDataUrl } from './barcodeGenerator';
 import { substituteVariables } from './excelHelper';
 
+export interface RenderLabelOptions {
+  highContrastThermal?: boolean;
+}
+
 /**
  * Renders a single label to an HTML Canvas with high DPI scaling.
  */
 export async function renderLabelToCanvas(
   template: LabelTemplate,
   dataRow: Record<string, any>,
-  targetDpi = 300
+  targetDpi = 300,
+  options: RenderLabelOptions = {}
 ): Promise<HTMLCanvasElement> {
   const mmToPx = (mm: number) => (mm * targetDpi) / 25.4;
 
@@ -73,8 +78,15 @@ export async function renderLabelToCanvas(
     }
 
     if (el.type === 'rectangle') {
-      ctx.fillStyle = el.fillColor || 'transparent';
-      ctx.strokeStyle = el.strokeColor || 'transparent';
+      const fillColor = options.highContrastThermal && el.fillColor && el.fillColor !== 'transparent' && el.fillColor !== '#ffffff'
+        ? '#000000'
+        : (el.fillColor || 'transparent');
+      const strokeColor = options.highContrastThermal && el.strokeColor && el.strokeColor !== 'transparent'
+        ? '#000000'
+        : (el.strokeColor || 'transparent');
+
+      ctx.fillStyle = fillColor;
+      ctx.strokeStyle = strokeColor;
       ctx.lineWidth = mmToPx(el.strokeWidth || 0.2);
 
       if (el.cornerRadius && typeof ctx.roundRect === 'function') {
@@ -91,7 +103,7 @@ export async function renderLabelToCanvas(
         if (el.strokeColor && el.strokeColor !== 'transparent' && el.strokeWidth > 0) ctx.strokeRect(x, y, w, h);
       }
     } else if (el.type === 'line') {
-      ctx.strokeStyle = el.strokeColor || '#000000';
+      ctx.strokeStyle = options.highContrastThermal ? '#000000' : (el.strokeColor || '#000000');
       ctx.lineWidth = mmToPx(el.strokeWidth || 0.3);
       ctx.beginPath();
       ctx.moveTo(x, y + h / 2);
@@ -103,7 +115,11 @@ export async function renderLabelToCanvas(
       const fontPx = fontPt * (targetDpi / 72);
       const lineHeightPx = fontPx * (el.lineHeight || 1.15);
 
-      ctx.fillStyle = el.color || '#000000';
+      const textColor = options.highContrastThermal
+        ? (el.color === '#ffffff' || el.color === 'white' ? '#ffffff' : '#000000')
+        : (el.color || '#000000');
+
+      ctx.fillStyle = textColor;
       ctx.font = `${el.fontStyle === 'italic' ? 'italic ' : ''}${
         el.fontWeight === 'bold' || el.fontWeight === '800' ? 'bold ' : ''
       }${fontPx}px ${el.fontFamily || 'sans-serif'}`;
@@ -166,33 +182,44 @@ export async function renderLabelToCanvas(
       if (substitutedContent && substitutedContent.trim() && !elDataRow._isEmpty) {
         const qrDataUrl = await generateQRDataUrl({
           content: substitutedContent,
-          fgColor: el.fgColor,
-          bgColor: el.bgColor,
+          fgColor: options.highContrastThermal ? '#000000' : (el.fgColor || '#000000'),
+          bgColor: el.bgColor || '#ffffff',
           errorCorrection: el.errorCorrection,
           logoUrl: el.logoUrl,
           logoSizeRatio: el.logoSizeRatio,
-          width: Math.max(200, Math.round(w)),
+          width: Math.max(300, Math.round(Math.max(w, h))),
         });
 
         const img = await loadImage(qrDataUrl);
+        // Disable image smoothing for razor-sharp QR pixel modules
+        ctx.imageSmoothingEnabled = false;
         ctx.drawImage(img, x, y, w, h);
+        ctx.imageSmoothingEnabled = true;
       }
     } else if (el.type === 'barcode') {
       const substitutedContent = substituteVariables(el.content, elDataRow);
       if (substitutedContent && substitutedContent.trim() && !elDataRow._isEmpty) {
+        // Calculate appropriate barcode bar width for high resolution
+        const estimatedModules = Math.max(35, (substitutedContent.length + 4) * 11);
+        const calculatedBarWidth = Math.max(2, Math.floor((w - 16) / estimatedModules));
+
         const barcodeDataUrl = generateBarcodeDataUrl({
           content: substitutedContent,
           format: el.format,
-          fgColor: el.fgColor,
-          bgColor: el.bgColor,
+          fgColor: options.highContrastThermal ? '#000000' : (el.fgColor || '#000000'),
+          bgColor: el.bgColor || '#ffffff',
           displayValue: el.displayValue,
-          fontSize: el.fontSize,
+          fontSize: Math.max(12, Math.round((el.fontSize || 12) * (targetDpi / 72))),
           fontFamily: el.fontFamily,
-          height: Math.max(50, Math.round(h * 2)),
+          height: Math.max(60, Math.round(h * 1.5)),
+          width: calculatedBarWidth,
         });
 
         const img = await loadImage(barcodeDataUrl);
+        // Disable image smoothing for sharp black/white barcode vertical bars
+        ctx.imageSmoothingEnabled = false;
         ctx.drawImage(img, x, y, w, h);
+        ctx.imageSmoothingEnabled = true;
       }
     } else if (el.type === 'image' && el.src) {
       try {

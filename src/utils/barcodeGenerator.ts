@@ -26,6 +26,7 @@ export function generateBarcodeDataUrl(options: BarcodeRenderOptions): string {
     fontSize = 14,
     fontFamily = 'monospace',
     height = 60,
+    width = 2,
   } = options;
 
   const rawContent = (content || '1234567890').trim();
@@ -60,7 +61,7 @@ export function generateBarcodeDataUrl(options: BarcodeRenderOptions): string {
       font: fontFamily,
       height: height,
       margin: 4,
-      width: 2,
+      width: Math.max(1, Math.round(width)),
     });
 
     return canvas.toDataURL('image/png');
@@ -76,7 +77,7 @@ export function generateBarcodeDataUrl(options: BarcodeRenderOptions): string {
         fontSize: fontSize,
         height: height,
         margin: 4,
-        width: 2,
+        width: Math.max(1, Math.round(width)),
       });
       return fallbackCanvas.toDataURL('image/png');
     } catch {

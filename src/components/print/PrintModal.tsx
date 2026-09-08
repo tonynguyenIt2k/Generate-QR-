@@ -19,6 +19,8 @@ import {
   Save,
   Zap,
   ExternalLink,
+  FileText,
+  CheckCircle2,
 } from 'lucide-react';
 import { GeneratedLabel, LabelTemplate, PrintSettings } from '../../types/label';
 import { exportBatchPdf, renderLabelToCanvas } from '../../utils/pdfExporter';
@@ -41,6 +43,8 @@ export const PrintModal: React.FC<PrintModalProps> = ({
   sampleDataRow = {},
   autoPrintTrigger = false,
 }) => {
+  const [highContrastThermal, setHighContrastThermal] = useState<boolean>(true);
+
   const [printSettings, setPrintSettings] = useState<PrintSettings>(() => {
     try {
       const saved = localStorage.getItem('saved_print_settings');
@@ -50,6 +54,7 @@ export const PrintModal: React.FC<PrintModalProps> = ({
           ...parsed,
           widthMm: template.widthMm,
           heightMm: template.heightMm,
+          dpi: parsed.dpi && parsed.dpi >= 300 ? parsed.dpi : 300, // Ensure crisp 300 DPI minimum default
         };
       }
     } catch (e) {
@@ -59,7 +64,7 @@ export const PrintModal: React.FC<PrintModalProps> = ({
       presetId: 'custom',
       widthMm: template.widthMm,
       heightMm: template.heightMm,
-      dpi: 203, // standard thermal printer resolution
+      dpi: 300, // 300 DPI high resolution for razor-sharp thermal & browser print
       marginTopMm: 0,
       marginBottomMm: 0,
       marginLeftMm: 0,
@@ -217,22 +222,25 @@ export const PrintModal: React.FC<PrintModalProps> = ({
     }
   };
 
-  const printWithHiddenIframe = (htmlContent: string): Promise<void> => {
+  const printWithHiddenIframe = (htmlContent: string, widthMm: number, heightMm: number): Promise<void> => {
     return new Promise((resolve) => {
       let iframe = document.getElementById('printable-thermal-iframe') as HTMLIFrameElement | null;
       if (!iframe) {
         iframe = document.createElement('iframe');
         iframe.id = 'printable-thermal-iframe';
         iframe.style.position = 'fixed';
-        iframe.style.right = '0';
-        iframe.style.bottom = '0';
-        iframe.style.width = '0px';
-        iframe.style.height = '0px';
+        iframe.style.top = '-99999px';
+        iframe.style.left = '-99999px';
+        iframe.style.width = `${Math.max(50, widthMm)}mm`;
+        iframe.style.height = `${Math.max(30, heightMm)}mm`;
         iframe.style.border = '0';
         iframe.style.opacity = '0';
         iframe.style.pointerEvents = 'none';
         iframe.style.zIndex = '-9999';
         document.body.appendChild(iframe);
+      } else {
+        iframe.style.width = `${Math.max(50, widthMm)}mm`;
+        iframe.style.height = `${Math.max(30, heightMm)}mm`;
       }
 
       const doc = iframe.contentWindow?.document || iframe.contentDocument;
@@ -241,19 +249,79 @@ export const PrintModal: React.FC<PrintModalProps> = ({
         doc.write(htmlContent);
         doc.close();
 
-        setTimeout(() => {
+        const triggerPrint = () => {
           try {
-            iframe?.contentWindow?.focus();
-            iframe?.contentWindow?.print();
+            const win = iframe?.contentWindow;
+            if (win) {
+              win.focus();
+              win.print();
+            }
           } catch (e) {
             console.error('Lỗi khi kích hoạt lệnh in từ iframe:', e);
           }
           resolve();
-        }, 500);
+        };
+
+        const win = iframe.contentWindow;
+        if (win) {
+          win.onload = () => {
+            const imgs = Array.from(win.document.images);
+            Promise.all(
+              imgs.map((img) => {
+                if (img.complete) {
+                  return img.decode ? img.decode().catch(() => {}) : Promise.resolve();
+                }
+                return new Promise((res) => {
+                  img.onload = () => (img.decode ? img.decode().catch(() => {}).then(res) : res(null));
+                  img.onerror = () => res(null);
+                });
+              })
+            ).then(() => {
+              setTimeout(triggerPrint, 250);
+            });
+          };
+          // Fallback timeout in case onload doesn't fire
+          setTimeout(triggerPrint, 1200);
+        } else {
+          setTimeout(triggerPrint, 500);
+        }
       } else {
         resolve();
       }
     });
+  };
+
+  const handlePrintViaPdf = async () => {
+    if (activeLabels.length === 0) {
+      showToast('Cảnh báo', 'Không có tem nào được chọn để in!', 'warning');
+      return;
+    }
+
+    setIsPrintingDirect(true);
+    showToast('Đang kết xuất PDF siêu nét...', 'Đang xử lý dữ liệu vector độ nét cao...', 'info');
+
+    try {
+      const pdf = await exportBatchPdf(template, activeLabels, printSettings, (curr, tot) => {
+        setProgress({ current: curr, total: tot });
+      });
+
+      const blob = pdf.output('blob');
+      const blobUrl = URL.createObjectURL(blob);
+
+      // Open in a new tab/window where user can press Ctrl+P with perfect vector sharpness
+      const pdfWin = window.open(blobUrl, '_blank');
+      if (!pdfWin) {
+        pdf.save(`In_Tem_${template.name.replace(/[^a-zA-Z0-9]/g, '_')}_${Date.now()}.pdf`);
+        showToast('Thông báo', 'Đã tải tệp PDF siêu nét về máy (trình duyệt chặn cửa sổ tự bật). Mở file để in ngay!', 'info');
+      } else {
+        showToast('Thành công', 'Đã mở tệp PDF siêu nét! Nhấn In (Ctrl+P) trên trình duyệt để in với độ nét 100%.', 'success');
+      }
+    } catch (err) {
+      console.error('Lỗi khi in qua PDF:', err);
+      showToast('Lỗi in ấn', 'Không thể tạo bản in PDF: ' + String(err), 'error');
+    } finally {
+      setIsPrintingDirect(false);
+    }
   };
 
   const handleDirectBrowserPrint = async (openNewTab: boolean = false) => {
@@ -272,7 +340,7 @@ export const PrintModal: React.FC<PrintModalProps> = ({
             <html>
               <head>
                 <meta charset="utf-8" />
-                <title>Đang chuẩn bị trang in - ${template.name}</title>
+                <title>Đang chuẩn bị trang in siêu nét - ${template.name}</title>
                 <style>
                   body {
                     font-family: system-ui, -apple-system, sans-serif;
@@ -301,8 +369,8 @@ export const PrintModal: React.FC<PrintModalProps> = ({
               </head>
               <body>
                 <div class="spinner"></div>
-                <div class="title">Đang xử lý bản in cho máy in nhiệt...</div>
-                <div class="subtitle">Cửa sổ in của hệ thống sẽ tự động bật lên ngay sau đây.</div>
+                <div class="title">Đang kết xuất bản in siêu nét (${printSettings.dpi || 300} DPI)...</div>
+                <div class="subtitle">Độ nét cao & tương phản đen 100% cho máy in nhiệt. Cửa sổ in sẽ tự động bật lên.</div>
               </body>
             </html>
           `);
@@ -314,18 +382,23 @@ export const PrintModal: React.FC<PrintModalProps> = ({
     }
 
     setIsPrintingDirect(true);
-    showToast('Đang tạo bản in...', 'Hệ thống đang xử lý dữ liệu cho máy in nhiệt...', 'info');
+    const printDpi = Math.max(300, printSettings.dpi || 300);
+    showToast('Đang tạo bản in siêu nét...', `Đang render độ phân giải cao ${printDpi} DPI chống mờ...`, 'info');
 
     try {
       const images: string[] = [];
-      const dpi = printSettings.dpi || 203;
 
-      for (const item of activeLabels) {
-        let url = renderedThumbnails[item.id];
-        if (!url) {
-          const canvas = await renderLabelToCanvas(template, item.data, dpi);
-          url = canvas.toDataURL('image/png');
+      // Always render freshly at high resolution (NEVER reuse low-res preview thumbnails)
+      const renderCache: Record<string, string> = {};
+      for (let i = 0; i < activeLabels.length; i++) {
+        const item = activeLabels[i];
+        if (!renderCache[item.id]) {
+          const canvas = await renderLabelToCanvas(template, item.data, printDpi, {
+            highContrastThermal,
+          });
+          renderCache[item.id] = canvas.toDataURL('image/png');
         }
+        const url = renderCache[item.id];
         const copies = Math.max(1, printSettings.copiesPerItem || 1);
         for (let c = 0; c < copies; c++) {
           images.push(url);
@@ -359,21 +432,18 @@ export const PrintModal: React.FC<PrintModalProps> = ({
         )
         .join('');
 
-      const widthInInches = (totalRowW / 25.4).toFixed(2);
-      const heightInInches = (labelH / 25.4).toFixed(2);
-
       const fullHtml = `
         <!DOCTYPE html>
         <html>
           <head>
             <meta charset="utf-8" />
-            <title>In Tem Nhãn - ${template.name}</title>
+            <title>In Tem Nhãn Siêu Nét - ${template.name}</title>
             <style>
               *, *:before, *:after { box-sizing: border-box; }
               
               @media print {
                 @page {
-                  size: ${widthInInches}in ${heightInInches}in;
+                  size: ${totalRowW}mm ${labelH}mm;
                   margin: 0mm !important;
                 }
                 html, body {
@@ -382,6 +452,9 @@ export const PrintModal: React.FC<PrintModalProps> = ({
                   background: #ffffff !important;
                   width: ${totalRowW}mm !important;
                   height: ${labelH}mm !important;
+                  -webkit-print-color-adjust: exact !important;
+                  print-color-adjust: exact !important;
+                  color-adjust: exact !important;
                 }
                 .print-action-bar {
                   display: none !important;
@@ -405,6 +478,12 @@ export const PrintModal: React.FC<PrintModalProps> = ({
                   height: ${labelH}mm !important;
                   object-fit: contain !important;
                   display: block !important;
+                  image-rendering: -webkit-optimize-contrast !important;
+                  image-rendering: crisp-edges !important;
+                  image-rendering: pixelated !important;
+                  -webkit-print-color-adjust: exact !important;
+                  print-color-adjust: exact !important;
+                  color-adjust: exact !important;
                 }
               }
 
@@ -473,6 +552,8 @@ export const PrintModal: React.FC<PrintModalProps> = ({
                   height: ${labelH}mm !important;
                   object-fit: contain !important;
                   display: block !important;
+                  image-rendering: -webkit-optimize-contrast !important;
+                  image-rendering: crisp-edges !important;
                 }
               }
             </style>
@@ -480,9 +561,9 @@ export const PrintModal: React.FC<PrintModalProps> = ({
           <body>
             <div class="print-action-bar">
               <div>
-                <strong style="font-size:14px; color:#ffffff;">Xem Trước Tem In Nhiệt</strong>
+                <strong style="font-size:14px; color:#ffffff;">Bản In Siêu Nét (${printDpi} DPI)</strong>
                 <div style="font-size:12px; color:#94a3b8; margin-top:2px;">
-                  Mẫu: ${template.name} (${totalRowW}mm x ${labelH}mm)
+                  Mẫu: ${template.name} (${totalRowW}mm x ${labelH}mm) · Đã tối ưu chống mờ
                 </div>
               </div>
               <button class="print-btn" onclick="window.print()">🖨️ In Ngay (Ctrl+P)</button>
@@ -490,10 +571,19 @@ export const PrintModal: React.FC<PrintModalProps> = ({
             ${rowsHtml}
             <script>
               window.onload = function() {
-                setTimeout(function() {
-                  window.focus();
-                  window.print();
-                }, 350);
+                var imgs = Array.from(document.images);
+                Promise.all(imgs.map(function(img) {
+                  if (img.complete) return img.decode ? img.decode().catch(function(){}) : Promise.resolve();
+                  return new Promise(function(res) {
+                    img.onload = function() { img.decode ? img.decode().catch(function(){}).then(res) : res(); };
+                    img.onerror = res;
+                  });
+                })).then(function() {
+                  setTimeout(function() {
+                    window.focus();
+                    window.print();
+                  }, 250);
+                });
               };
             </script>
           </body>
@@ -506,9 +596,9 @@ export const PrintModal: React.FC<PrintModalProps> = ({
         printWin.location.href = blobUrl;
         showToast('Thành công', 'Đã mở trang in ở tab mới! Cửa sổ in hệ thống đang bật lên.', 'success');
       } else {
-        // Direct print via hidden iframe (No Popup Blocker Issue!)
-        await printWithHiddenIframe(fullHtml);
-        showToast('Thành công', 'Đã mở hộp thoại in trực tiếp trên trang!', 'success');
+        // Direct print via hidden iframe with exact label dimensions
+        await printWithHiddenIframe(fullHtml, totalRowW, labelH);
+        showToast('Thành công', 'Đã mở hộp thoại in trực tiếp siêu nét!', 'success');
       }
     } catch (err) {
       console.error('Lỗi khi in trực tiếp:', err);
@@ -614,10 +704,32 @@ export const PrintModal: React.FC<PrintModalProps> = ({
                 }
                 className="w-full p-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-medium focus:ring-2 focus:ring-blue-500 outline-none"
               >
-                <option value={203}>203 DPI (XPrinter, Rongta, Gprinter tiêu chuẩn)</option>
-                <option value={300}>300 DPI (Zebra, TSC, Godex nét cao)</option>
-                <option value={600}>600 DPI (Brother, Honeywell siêu nét)</option>
+                <option value={300}>300 DPI (Khuyên dùng: Chuẩn Nét Cao Zebra, TSC, Xprinter, Godex)</option>
+                <option value={600}>600 DPI (Siêu Nét Ultra HD: Tối ưu mã vạch dày & chữ nhỏ)</option>
+                <option value={203}>203 DPI (Tiêu chuẩn máy in nhiệt cơ bản)</option>
               </select>
+            </div>
+
+            {/* Anti-blur High Contrast Toggle */}
+            <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 rounded-xl space-y-1.5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5 font-bold text-emerald-900 dark:text-emerald-200 text-xs">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                  <span>Khử Mờ Nét / Chống Răng Cưa (300 DPI)</span>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={highContrastThermal}
+                    onChange={(e) => setHighContrastThermal(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-9 h-5 bg-slate-300 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-600"></div>
+                </label>
+              </div>
+              <p className="text-[10.5px] text-emerald-800/90 dark:text-emerald-300/90 leading-tight">
+                Tối ưu hóa độ đen 100% không hạt (dithering) và khử mờ viền CSS khi in trực tiếp từ trình duyệt.
+              </p>
             </div>
 
             {/* Copies */}
@@ -704,14 +816,17 @@ export const PrintModal: React.FC<PrintModalProps> = ({
             <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 rounded-xl text-[11px] space-y-1.5 text-amber-900 dark:text-amber-200">
               <div className="font-bold flex items-center gap-1.5 text-amber-800 dark:text-amber-300 text-[11.5px]">
                 <span className="text-sm">📌</span>
-                <span>Cố Định Khổ Tem Chuẩn Trên Máy In Nhiệt</span>
+                <span>Hướng Dẫn In Nét 100% Cả Trực Tiếp & PDF</span>
               </div>
               <ul className="list-disc pl-4 space-y-1 text-[10.5px] leading-relaxed text-amber-900/90 dark:text-amber-200/90">
                 <li>
-                  <b>Để không bị lệch khổ:</b> Trong cài đặt máy in, chọn khổ <b>USER ({((template.widthMm * printSettings.labelsPerRow + printSettings.gapMm * (printSettings.labelsPerRow - 1)) / 25.4).toFixed(2)} x {(template.heightMm / 25.4).toFixed(2)} in)</b>.
+                  <b>Khắc phục in mờ:</b> Bản in trực tiếp giờ đã render ở chuẩn <b>300 DPI</b> với cơ chế khử mờ viền CSS (không bị nén ảnh).
                 </li>
                 <li>
-                  <b>Lề trình duyệt:</b> Chọn <b>Margins = None (Không lề)</b>, <b>Scale = 100%</b>.
+                  <b>Lề hộp thoại in:</b> Khi hộp thoại in hiện ra, chọn <b>Margins = None (Không lề)</b> và <b>Scale = 100%</b> để tem không bị co méo.
+                </li>
+                <li>
+                  <b>Tùy chọn in qua PDF:</b> Bạn cũng có thể dùng nút <b>"In Qua PDF (Một Chạm)"</b> để mở ngay trình xem PDF vector nét tuyệt đối.
                 </li>
               </ul>
             </div>
@@ -972,8 +1087,7 @@ export const PrintModal: React.FC<PrintModalProps> = ({
 
         {/* Footer: Responsive Mobile & Desktop Layout */}
         <div className="p-2.5 sm:p-4 border-t border-slate-200/80 dark:border-slate-800 bg-slate-50/95 dark:bg-slate-900 backdrop-blur-md flex items-center justify-between gap-2.5 shrink-0">
-          {/* 3 Optimized Action Buttons */}
-          <div className="grid grid-cols-3 sm:flex sm:items-center sm:justify-end gap-2 sm:gap-3 w-full">
+          <div className="grid grid-cols-2 sm:flex sm:items-center sm:justify-end gap-2 sm:gap-3 w-full">
             <button
               onClick={() => handleDirectBrowserPrint(true)}
               disabled={isPrintingDirect || printableList.length === 0}
@@ -981,28 +1095,37 @@ export const PrintModal: React.FC<PrintModalProps> = ({
               title="Mở bản in ở tab mới"
             >
               <ExternalLink className="w-4 h-4 shrink-0 text-slate-600 dark:text-slate-300" />
-              <span className="hidden sm:inline">Mở Tab In</span>
-              <span className="sm:hidden">Tab In</span>
+              <span>Mở Tab In</span>
             </button>
 
             <button
               onClick={handleDownloadPdf}
               disabled={exportingPdf || printableList.length === 0}
-              className="flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-5 h-11 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 disabled:opacity-50 text-white font-bold rounded-2xl shadow-md shadow-emerald-500/20 transition-all cursor-pointer text-xs sm:text-sm text-center active:scale-[0.98]"
+              className="flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 h-11 bg-slate-200/90 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 disabled:opacity-50 text-slate-800 dark:text-slate-100 font-bold rounded-2xl transition-all cursor-pointer text-xs sm:text-sm text-center shadow-xs active:scale-[0.98] border border-transparent dark:border-slate-700"
+              title="Tải tệp PDF về máy"
             >
-              <Download className="w-4 h-4 shrink-0" />
-              <span className="hidden sm:inline">Xuất File PDF</span>
-              <span className="sm:hidden">File PDF</span>
+              <Download className="w-4 h-4 shrink-0 text-slate-600 dark:text-slate-300" />
+              <span>Tải File PDF</span>
+            </button>
+
+            <button
+              onClick={handlePrintViaPdf}
+              disabled={isPrintingDirect || exportingPdf || printableList.length === 0}
+              className="flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-5 h-11 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 disabled:opacity-50 text-white font-bold rounded-2xl shadow-md shadow-emerald-500/20 transition-all cursor-pointer text-xs sm:text-sm text-center active:scale-[0.98] whitespace-nowrap"
+              title="Mở trực tiếp tệp PDF vector nét tuyệt đối để in"
+            >
+              <FileText className="w-4 h-4 shrink-0" />
+              <span>In Qua PDF (Nét Nhất)</span>
             </button>
 
             <button
               onClick={() => handleDirectBrowserPrint(false)}
               disabled={isPrintingDirect || printableList.length === 0}
               className="flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-6 h-11 bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 hover:from-blue-700 hover:to-indigo-700 disabled:opacity-50 text-white font-black rounded-2xl shadow-lg shadow-indigo-500/25 transition-all cursor-pointer text-xs sm:text-sm ring-2 ring-blue-400/40 active:scale-[0.98] text-center whitespace-nowrap"
+              title="In trực tiếp qua hộp thoại in của trình duyệt ở chuẩn 300 DPI"
             >
               <Zap className="w-4 h-4 text-amber-300 fill-amber-300 animate-pulse shrink-0" />
-              <span className="hidden sm:inline">{isPrintingDirect ? 'Đang gửi...' : 'IN NGAY TRỰC TIẾP'}</span>
-              <span className="sm:hidden">{isPrintingDirect ? 'Đang in...' : 'IN NGAY'}</span>
+              <span>{isPrintingDirect ? 'Đang gửi...' : 'IN TRỰC TIẾP (300 DPI)'}</span>
             </button>
           </div>
         </div>
