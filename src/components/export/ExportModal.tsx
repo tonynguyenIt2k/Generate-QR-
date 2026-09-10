@@ -17,7 +17,10 @@ import {
   Layers,
   HelpCircle,
   QrCode,
+  Package,
+  FileCode,
 } from 'lucide-react';
+import JSZip from 'jszip';
 import { GeneratedLabel, LabelTemplate, DatasetRow } from '../../types/label';
 import { renderLabelToCanvas } from '../../utils/pdfExporter';
 import { exportLabelsToZip } from '../../utils/zipExporter';
@@ -33,6 +36,7 @@ interface ExportModalProps {
   generatedLabels: GeneratedLabel[];
   sampleDataRow: Record<string, any>;
   onRestoreBackup?: (backup: AppBackupData) => void;
+  initialTab?: 'files' | 'apk';
 }
 
 export const ExportModal: React.FC<ExportModalProps> = ({
@@ -44,15 +48,23 @@ export const ExportModal: React.FC<ExportModalProps> = ({
   generatedLabels,
   sampleDataRow,
   onRestoreBackup,
+  initialTab = 'files',
 }) => {
-  const [activeTab, setActiveTab] = useState<'files' | 'apk'>('files');
+  const [activeTab, setActiveTab] = useState<'files' | 'apk'>(initialTab);
   const [exportingZip, setExportingZip] = useState(false);
+  const [downloadingApkPkg, setDownloadingApkPkg] = useState(false);
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   const [backupNotice, setBackupNotice] = useState<string | null>(null);
   const [copiedUrl, setCopiedUrl] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isInstallable, setIsInstallable] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      setActiveTab(initialTab);
+    }
+  }, [isOpen, initialTab]);
 
   useEffect(() => {
     const handleBeforeInstallPrompt = (e: any) => {
@@ -89,6 +101,155 @@ export const ExportModal: React.FC<ExportModalProps> = ({
     navigator.clipboard.writeText(currentAppUrl);
     setCopiedUrl(true);
     setTimeout(() => setCopiedUrl(false), 2500);
+  };
+
+  const handleDownloadAndroidPackage = async () => {
+    setDownloadingApkPkg(true);
+    try {
+      const zip = new JSZip();
+      const hostname = typeof window !== 'undefined' ? window.location.hostname : 'qrlabelpro.app';
+
+      const twaManifest = {
+        packageId: 'com.hungboa.qrlabelpro',
+        host: hostname,
+        name: 'QR Label Pro - In Tem Nhãn',
+        launcherName: 'QR Label',
+        themeColor: '#4F46E5',
+        navigationColor: '#0F172A',
+        backgroundColor: '#FFFFFF',
+        startUrl: '/?homescreen=1',
+        iconUrl: '/icon-512.png',
+        maskableIconUrl: '/icons/maskable-icon-512x512.png',
+        appVersionName: '1.0.0',
+        appVersionCode: 1,
+        shortcuts: [],
+        generatorApp: 'bubblewrap-cli',
+        webManifestUrl: '/manifest.json',
+        fallbackType: 'customtabs',
+        features: {
+          locationDelegation: { enabled: false },
+          playBilling: { enabled: false }
+        },
+        enableNotifications: false
+      };
+
+      const androidManifest = `<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.hungboa.qrlabelpro">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+
+    <application
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="QR Label"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@android:style/Theme.NoTitleBar.Fullscreen">
+        <activity
+            android:name="com.google.androidbrowserhelper.trusted.LauncherActivity"
+            android:exported="true"
+            android:label="QR Label">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>`;
+
+      const buildGradle = `// Top-level build file for Android
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:8.2.2'
+    }
+}
+
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}`;
+
+      const appGradle = `plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.hungboa.qrlabelpro'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.hungboa.qrlabelpro"
+        minSdk 21
+        targetSdk 34
+        versionCode 1
+        versionName "1.0.0"
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+}
+
+dependencies {
+    implementation 'com.google.androidbrowserhelper:androidbrowserhelper:2.5.0'
+}`;
+
+      const instructions = `================================================================
+HƯỚNG DẪN TẠO FILE APK CHO QR LABEL PRO TRÊN ANDROID
+================================================================
+
+CÁCH 1: TẠO FILE APK ONLINE TRONG 1 PHÚT (KHÔNG CẦN CÀI ANDROID STUDIO):
+1. Truy cập trang web chính thức của Microsoft PWABuilder:
+   https://www.pwabuilder.com
+2. Nhập URL ứng dụng web của bạn:
+   ${currentAppUrl}
+3. Bấm "Start" để hệ thống tự động kiểm tra manifest.
+4. Bấm "Package for Android" -> Chọn "Generate APK / Signed Package".
+5. PWABuilder sẽ đóng gói và trả về file .apk để bạn cài đặt trực tiếp lên điện thoại Android!
+
+----------------------------------------------------------------
+CÁCH 2: DÙNG BUBBLEWRAP CLI (GOOGLE CHROME TEAM):
+1. Cài đặt Node.js và Android SDK / Java JDK.
+2. Mở terminal và chạy lệnh:
+   npm install -g @bubblewrap/cli
+   bubblewrap init --manifest=${currentAppUrl}/manifest.json
+   bubblewrap build
+3. File APK ký sẵn sẽ được tạo ra tại thư mục hiện tại.
+
+----------------------------------------------------------------
+CÁCH 3: CÀI ĐẶT TRỰC TIẾP (CHUẨN GOOGLE WEBAPK):
+- Mở Chrome trên Android -> Vào link ứng dụng -> Bấm nút ⋮ (3 chấm)
+- Chọn "Cài đặt ứng dụng" -> Google Play Services sẽ tự động biên dịch WebAPK
+  ngay trong máy của bạn với hiệu năng mượt mà nhất.
+================================================================`;
+
+      zip.file('twa-manifest.json', JSON.stringify(twaManifest, null, 2));
+      zip.file('AndroidManifest.xml', androidManifest);
+      zip.file('build.gradle', buildGradle);
+      zip.file('app-build.gradle', appGradle);
+      zip.file('HUONG_DAN_TAO_FILE_APK.txt', instructions);
+
+      const content = await zip.generateAsync({ type: 'blob' });
+      saveAs(content, 'QR_Label_Android_Source_Package.zip');
+      setBackupNotice('Đã tải gói mã nguồn Android & file cấu hình APK thành công!');
+      setTimeout(() => setBackupNotice(null), 4000);
+    } catch (e: any) {
+      alert('Lỗi tạo gói Android: ' + String(e));
+    } finally {
+      setDownloadingApkPkg(false);
+    }
   };
 
   const handleExportSinglePng = async () => {
@@ -294,19 +455,79 @@ export const ExportModal: React.FC<ExportModalProps> = ({
           ) : (
             /* APK & Mobile Installation Tab */
             <div className="space-y-4">
-              {/* Quick 1-Click Install Card */}
-              <div className="p-4 rounded-2xl border-2 border-emerald-500/40 bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-950/40 dark:to-teal-950/20 space-y-3 shadow-xs">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="p-2 rounded-xl bg-emerald-600 text-white shadow-md shadow-emerald-600/20">
+              {/* Option 1: Generate Standalone .APK File Online (PWABuilder) */}
+              <div className="p-4 rounded-2xl border-2 border-indigo-500/50 bg-gradient-to-br from-indigo-50/90 to-blue-50/70 dark:from-indigo-950/40 dark:to-blue-950/30 space-y-3 shadow-xs">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2.5 rounded-xl bg-indigo-600 text-white shadow-md shadow-indigo-600/30 shrink-0">
+                      <Package className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-extrabold text-sm text-indigo-950 dark:text-indigo-100">
+                          Tạo File .APK Độc Lập (PWABuilder)
+                        </h3>
+                        <span className="px-2 py-0.5 bg-indigo-200 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200 text-[10px] font-black rounded-full uppercase">
+                          Khuyên dùng
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-indigo-900/70 dark:text-indigo-300/80 mt-0.5 leading-relaxed">
+                        Công cụ chính thức từ Microsoft/Google biến Web thành file <strong>.apk</strong> cài đặt trên mọi điện thoại Android trong 1 phút!
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-2.5 bg-white/80 dark:bg-slate-900/80 rounded-xl border border-indigo-100 dark:border-indigo-900/60 space-y-1 text-[11px]">
+                  <p className="font-semibold text-slate-800 dark:text-slate-200">
+                    3 Bước cực nhanh để tải file .APK:
+                  </p>
+                  <ol className="list-decimal list-inside space-y-0.5 text-slate-600 dark:text-slate-400">
+                    <li>Bấm nút bên dưới để mở PWABuilder (đã tự điền link app)</li>
+                    <li>Bấm nút màu tím <strong>"Package for Android"</strong></li>
+                    <li>Bấm <strong>"Download Package / APK"</strong> để tải file cài đặt về</li>
+                  </ol>
+                </div>
+
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pt-1">
+                  <a
+                    href={`https://www.pwabuilder.com/reportcard?url=${encodeURIComponent(currentAppUrl)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex-1 py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-bold rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer shadow-md shadow-indigo-600/30 text-center"
+                  >
+                    <span>Mở PWABuilder Tạo File APK</span>
+                    <ExternalLink className="w-4 h-4" />
+                  </a>
+                  <button
+                    onClick={handleCopyUrl}
+                    className="py-2.5 px-3 bg-white dark:bg-slate-800 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-50 text-indigo-800 dark:text-indigo-200 font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                    title="Sao chép link web để dán vào PWABuilder hoặc gửi qua điện thoại"
+                  >
+                    {copiedUrl ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
+                    <span>{copiedUrl ? 'Đã sao chép' : 'Copy Link App'}</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Option 2: Direct Install on Android Phone (WebAPK) */}
+              <div className="p-4 rounded-2xl border-2 border-emerald-500/40 bg-gradient-to-br from-emerald-50/80 to-teal-50/60 dark:from-emerald-950/40 dark:to-teal-950/20 space-y-3 shadow-xs">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2 rounded-xl bg-emerald-600 text-white shadow-md shadow-emerald-600/20 shrink-0">
                       <Smartphone className="w-5 h-5" />
                     </div>
                     <div>
-                      <h3 className="font-extrabold text-sm text-emerald-950 dark:text-emerald-100">
-                        Cài Đặt Trực Tiếp Lên Android (PWA/APK)
-                      </h3>
-                      <p className="text-[11px] text-emerald-800/80 dark:text-emerald-300/80">
-                        Không cần qua CH Play, hoạt động toàn màn hình như ứng dụng cài đặt!
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-extrabold text-sm text-emerald-950 dark:text-emerald-100">
+                          Cài Đặt Tức Thì (Chuẩn Google WebAPK)
+                        </h3>
+                        <span className="px-2 py-0.5 bg-emerald-200 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200 text-[10px] font-black rounded-full uppercase">
+                          3 Giây
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-emerald-800/80 dark:text-emerald-300/80 mt-0.5">
+                        Android tự động đóng gói WebAPK vào máy, mở toàn màn hình độc lập như app cài từ CH Play!
                       </p>
                     </div>
                   </div>
@@ -318,84 +539,41 @@ export const ExportModal: React.FC<ExportModalProps> = ({
                     className="flex-1 py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer shadow-md shadow-emerald-600/30"
                   >
                     <Sparkles className="w-4 h-4" />
-                    <span>Cài Đặt Ngay Vào Điện Thoại</span>
-                  </button>
-                  <button
-                    onClick={handleCopyUrl}
-                    className="py-2.5 px-3 bg-white dark:bg-slate-800 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-50 text-emerald-800 dark:text-emerald-200 font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer"
-                    title="Sao chép link web để mở trên điện thoại"
-                  >
-                    {copiedUrl ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
-                    <span>{copiedUrl ? 'Đã sao chép Link' : 'Copy Link App'}</span>
+                    <span>Cài Đặt Ngay Vào Máy Android</span>
                   </button>
                 </div>
               </div>
 
-              {/* Step by Step Guide for APK packaging */}
-              <div className="space-y-2.5">
-                <h4 className="font-bold text-xs text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-                  <HelpCircle className="w-4 h-4 text-blue-500" />
-                  <span>3 Cách Tạo / Sử Dụng File APK Android:</span>
-                </h4>
-
-                {/* Method 1: Chrome / Browser install */}
-                <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-800 space-y-1.5">
-                  <div className="flex items-center gap-2">
-                    <span className="w-5 h-5 rounded-full bg-blue-600 text-white font-black text-[11px] flex items-center justify-center">
-                      1
-                    </span>
-                    <span className="font-bold text-slate-900 dark:text-slate-100">
-                      Cài đặt tức thì qua Trình duyệt Chrome / Cốc Cốc
-                    </span>
-                  </div>
-                  <p className="text-slate-600 dark:text-slate-400 pl-7 text-[11px] leading-relaxed">
-                    Mở link app trên điện thoại Android <span className="font-mono text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 px-1 py-0.5 rounded">Chrome</span> → Bấm nút <strong>⋮ (3 chấm)</strong> góc trên → Chọn <strong>"Cài đặt ứng dụng"</strong> hoặc <strong>"Thêm vào màn hình chính"</strong>.
-                  </p>
-                </div>
-
-                {/* Method 2: PWABuilder APK Generator */}
-                <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-800 space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="w-5 h-5 rounded-full bg-emerald-600 text-white font-black text-[11px] flex items-center justify-center">
-                        2
-                      </span>
-                      <span className="font-bold text-slate-900 dark:text-slate-100">
-                        Đóng gói thành file .APK độc lập (PWABuilder)
-                      </span>
+              {/* Option 3: Download Android Source Project (.ZIP) */}
+              <div className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 space-y-3 shadow-xs">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2 rounded-xl bg-purple-100 dark:bg-purple-950 text-purple-600 dark:text-purple-300 shrink-0">
+                      <FileCode className="w-5 h-5" />
                     </div>
-                    <a
-                      href={`https://www.pwabuilder.com?url=${encodeURIComponent(currentAppUrl)}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:underline"
-                    >
-                      <span>Mở PWABuilder</span>
-                      <ExternalLink className="w-3 h-3" />
-                    </a>
-                  </div>
-                  <p className="text-slate-600 dark:text-slate-400 pl-7 text-[11px] leading-relaxed">
-                    Truy cập trang <strong>PWABuilder.com</strong> (của Microsoft/Google) → Dán đường dẫn URL của ứng dụng → Chọn <strong>"Package for Android"</strong> để tải file <strong>.apk</strong> hoặc <strong>.aab</strong> đã đóng gói về máy.
-                  </p>
-                </div>
-
-                {/* Method 3: Capacitor Android Studio Project */}
-                <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-800 space-y-1.5">
-                  <div className="flex items-center gap-2">
-                    <span className="w-5 h-5 rounded-full bg-purple-600 text-white font-black text-[11px] flex items-center justify-center">
-                      3
-                    </span>
-                    <span className="font-bold text-slate-900 dark:text-slate-100">
-                      Build file APK Release qua Capacitor & Android Studio
-                    </span>
-                  </div>
-                  <div className="pl-7 text-[11px] text-slate-600 dark:text-slate-400 space-y-1">
-                    <p>Dành cho lập trình viên muốn xuất source code Android hoàn chỉnh:</p>
-                    <div className="bg-slate-900 text-slate-200 p-2 rounded-lg font-mono text-[10px] select-all">
-                      npm run build && npx cap add android && npx cap open android
+                    <div>
+                      <h3 className="font-extrabold text-sm text-slate-900 dark:text-slate-100">
+                        Tải Mã Nguồn Android & File Cấu Hình (.ZIP)
+                      </h3>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                        Bao gồm <code>AndroidManifest.xml</code>, <code>build.gradle</code>, <code>twa-manifest.json</code> và hướng dẫn build APK bằng Android Studio.
+                      </p>
                     </div>
                   </div>
                 </div>
+
+                <button
+                  onClick={handleDownloadAndroidPackage}
+                  disabled={downloadingApkPkg}
+                  className="w-full py-2.5 px-4 bg-slate-800 hover:bg-slate-900 dark:bg-slate-700 dark:hover:bg-slate-600 text-white font-bold rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer text-xs disabled:opacity-50"
+                >
+                  {downloadingApkPkg ? (
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Download className="w-4 h-4" />
+                  )}
+                  <span>{downloadingApkPkg ? 'Đang tạo file ZIP...' : 'Tải Gói Cấu Hình Android (.ZIP)'}</span>
+                </button>
               </div>
             </div>
           )}

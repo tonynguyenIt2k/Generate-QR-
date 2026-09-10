@@ -305,9 +305,15 @@ export default function App() {
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
   const [autoPrintTrigger, setAutoPrintTrigger] = useState(false);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  const [exportModalTab, setExportModalTab] = useState<'files' | 'apk'>('files');
   const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
   const [isPwaModalOpen, setIsPwaModalOpen] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+
+  const handleOpenExportModal = (tab: 'files' | 'apk' = 'files') => {
+    setExportModalTab(tab);
+    setIsExportModalOpen(true);
+  };
 
   // Listen for PWA Install Prompt
   useEffect(() => {
@@ -847,7 +853,7 @@ export default function App() {
           onOpenTemplates={() => setActiveTab('templates')}
           onOpenImportModal={() => setIsImportModalOpen(true)}
           onOpenPrintModal={handleOpenPrintModal}
-          onOpenExportModal={() => setIsExportModalOpen(true)}
+          onOpenExportModal={handleOpenExportModal}
           onOpenPwaModal={() => setIsPwaModalOpen(true)}
           onSaveTemplate={handleSaveCurrentTemplate}
           onNewTemplate={() => setActiveTab('templates')}
@@ -1279,6 +1285,7 @@ export default function App() {
         generatedLabels={generatedLabels}
         sampleDataRow={sampleDataRow}
         onRestoreBackup={handleRestoreBackup}
+        initialTab={exportModalTab}
       />
 
       <UpdateManagerModal
@@ -1305,7 +1312,7 @@ export default function App() {
         onOpenPrintModal={(instant) => handleOpenPrintModal(instant)}
         onOpenImportModal={() => setIsImportModalOpen(true)}
         onOpenTemplateGallery={() => setActiveTab('templates')}
-        onOpenExportModal={() => setIsExportModalOpen(true)}
+        onOpenExportModal={handleOpenExportModal}
         onOpenPwaModal={() => setIsPwaModalOpen(true)}
         onNewTemplate={() => setActiveTab('templates')}
         onOpenAuthModal={() => setIsAuthModalOpen(true)}

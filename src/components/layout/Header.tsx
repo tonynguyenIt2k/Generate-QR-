@@ -26,7 +26,7 @@ interface HeaderProps {
   onOpenTemplates?: () => void;
   onOpenImportModal?: () => void;
   onOpenPrintModal: (autoPrint?: boolean) => void;
-  onOpenExportModal: () => void;
+  onOpenExportModal: (tab?: 'files' | 'apk') => void;
   onSaveTemplate: () => void;
   onNewTemplate: () => void;
   datasetCount?: number;
@@ -182,27 +182,26 @@ export const Header: React.FC<HeaderProps> = ({
             <span className="whitespace-nowrap">Lưu Đè Mẫu</span>
           </button>
 
-          {/* Direct Install PWA / App */}
-          {onOpenPwaModal && (
-            <button
-              type="button"
-              onClick={onOpenPwaModal}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/50 dark:hover:bg-emerald-900/50 border border-emerald-200 dark:border-emerald-800/60 rounded-lg transition-colors cursor-pointer shrink-0 whitespace-nowrap"
-              title="Cài đặt ứng dụng vào điện thoại hoặc máy tính để sử dụng toàn màn hình"
-            >
-              <Smartphone className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
-              <span className="whitespace-nowrap">Cài Đặt App</span>
-            </button>
-          )}
-
-          {/* Export File & APK */}
+          {/* Export File */}
           <button
-            onClick={onOpenExportModal}
+            type="button"
+            onClick={() => onOpenExportModal('files')}
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-lg transition-colors cursor-pointer shrink-0 whitespace-nowrap"
-            title="Xuất File, Backup hoặc Cài đặt ứng dụng APK cho Android"
+            title="Xuất ảnh PNG, File ZIP hoặc sao lưu JSON"
           >
             <Download className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400 shrink-0" />
-            <span className="whitespace-nowrap">Xuất / Cài APK</span>
+            <span className="whitespace-nowrap">Xuất File</span>
+          </button>
+
+          {/* Create APK & Install App */}
+          <button
+            type="button"
+            onClick={() => onOpenExportModal('apk')}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/50 dark:hover:bg-emerald-900/50 border border-emerald-200 dark:border-emerald-800/60 rounded-lg transition-colors cursor-pointer shrink-0 whitespace-nowrap shadow-xs"
+            title="Tạo file APK độc lập hoặc cài đặt WebAPK toàn màn hình"
+          >
+            <Smartphone className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+            <span className="whitespace-nowrap">Tạo File APK</span>
           </button>
 
           {/* Auto Update EXE Button */}

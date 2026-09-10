@@ -35,7 +35,7 @@ interface FloatingDockProps {
   onOpenPrintModal: (instant?: boolean) => void;
   onOpenImportModal: () => void;
   onOpenTemplateGallery: () => void;
-  onOpenExportModal: () => void;
+  onOpenExportModal: (tab?: 'files' | 'apk') => void;
   onNewTemplate: () => void;
   onOpenAuthModal?: () => void;
   isLoggedIn?: boolean;
@@ -596,16 +596,12 @@ export const FloatingDock: React.FC<FloatingDockProps> = ({
                   </div>
                 </button>
 
-                {/* Action 4: Install PWA / App */}
+                {/* Action 4: Install PWA / App / APK */}
                 <button
                   onClick={() => {
                     triggerHaptic(15);
                     setIsMenuOpen(false);
-                    if (onOpenPwaModal) {
-                      onOpenPwaModal();
-                    } else {
-                      onOpenExportModal();
-                    }
+                    onOpenExportModal('apk');
                   }}
                   className="w-full flex items-center gap-3 px-3 py-2 rounded-2xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-semibold transition-all cursor-pointer text-left"
                 >
@@ -614,10 +610,10 @@ export const FloatingDock: React.FC<FloatingDockProps> = ({
                   </div>
                   <div className="flex-1">
                     <div className="flex items-center gap-1.5">
-                      <span>Cài Đặt Dùng Như App</span>
-                      <span className="px-1.5 py-0.2 bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200 text-[9px] font-bold rounded">MỚI</span>
+                      <span>Tạo File APK & Cài App</span>
+                      <span className="px-1.5 py-0.2 bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200 text-[9px] font-bold rounded">HOT</span>
                     </div>
-                    <div className="text-[10px] text-slate-500 dark:text-slate-400 font-normal">Dùng full màn hình không cần trình duyệt</div>
+                    <div className="text-[10px] text-slate-500 dark:text-slate-400 font-normal">Tải file APK độc lập hoặc cài toàn màn hình</div>
                   </div>
                 </button>
 

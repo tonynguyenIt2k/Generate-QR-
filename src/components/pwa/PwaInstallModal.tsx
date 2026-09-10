@@ -13,6 +13,7 @@ import {
   Layers,
   ArrowRight,
   Laptop,
+  ExternalLink,
 } from 'lucide-react';
 
 interface PwaInstallModalProps {
@@ -240,6 +241,27 @@ export const PwaInstallModal: React.FC<PwaInstallModalProps> = ({
                     Ứng dụng sẽ mở ở chế độ Full màn hình (không có thanh địa chỉ web), thao tác chạm kéo siêu mượt và không bị reload trang!
                   </p>
                 </div>
+              </div>
+
+              {/* Standalone APK Option */}
+              <div className="p-3 rounded-2xl bg-indigo-50/80 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800/60 flex items-center justify-between gap-2 shadow-xs">
+                <div>
+                  <p className="font-bold text-xs text-indigo-950 dark:text-indigo-200">
+                    Cần tải file cài đặt .APK độc lập?
+                  </p>
+                  <p className="text-[10px] text-indigo-800/80 dark:text-indigo-300/80">
+                    Tạo và tải file APK miễn phí qua công cụ chính thức PWABuilder
+                  </p>
+                </div>
+                <a
+                  href={`https://www.pwabuilder.com/reportcard?url=${encodeURIComponent(typeof window !== 'undefined' ? window.location.href : '')}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-bold rounded-xl text-[11px] shrink-0 transition-all shadow-xs flex items-center gap-1 cursor-pointer"
+                >
+                  <span>Tạo APK</span>
+                  <ExternalLink className="w-3 h-3" />
+                </a>
               </div>
             </div>
           )}
