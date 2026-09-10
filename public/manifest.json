@@ -1,16 +1,16 @@
 {
   "id": "/?homescreen=1",
   "name": "QR Label Pro - Thiết Kế & In Tem Nhãn",
-  "short_name": "QR Label Pro",
+  "short_name": "QR Label",
   "description": "Ứng dụng thiết kế và in tem nhãn mã vạch, mã QR chuyên nghiệp, nhập xuất dữ liệu Excel tốc độ cao.",
   "lang": "vi",
   "dir": "ltr",
-  "start_url": "/",
+  "start_url": "/?homescreen=1",
   "scope": "/",
   "display": "standalone",
   "display_override": [
-    "window-controls-overlay",
     "standalone",
+    "fullscreen",
     "minimal-ui",
     "browser"
   ],

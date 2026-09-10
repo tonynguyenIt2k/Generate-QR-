@@ -68,6 +68,11 @@ export default function App() {
       document.documentElement.classList.remove('dark');
       document.body.classList.remove('dark');
     }
+    // Dynamically update mobile browser/PWA status bar color
+    const themeMeta = document.getElementById('app-theme-color');
+    if (themeMeta) {
+      themeMeta.setAttribute('content', darkMode ? '#0f172a' : '#ffffff');
+    }
   }, [darkMode]);
 
   const handleToggleDarkMode = (newVal?: boolean) => {
@@ -831,7 +836,7 @@ export default function App() {
   }
 
   return (
-    <div className={`h-screen w-screen flex flex-col font-sans overflow-hidden select-none ${darkMode ? 'dark' : ''}`}>
+    <div className={`h-[100dvh] min-h-[100dvh] w-screen flex flex-col font-sans overflow-hidden select-none overscroll-none ${darkMode ? 'dark' : ''}`}>
       <div className="h-full w-full bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col">
         {/* Top Header */}
         <Header

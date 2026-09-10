@@ -26,7 +26,11 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { DatasetRow, LabelElement, LabelTemplate } from '../../types/label';
-import { generateSamplePhoneShopExcel } from '../../utils/excelHelper';
+import {
+  generateSamplePhoneShopExcel,
+  getSamplePhoneShopData,
+  getTemplateColumnKeys,
+} from '../../utils/excelHelper';
 import {
   ConfirmModal,
   ToastNotification,
@@ -34,6 +38,7 @@ import {
   ToastState,
 } from '../common/CustomAlert';
 import { TextScannerModal, ScanTargetInfo } from '../scanner/TextScannerModal';
+import { AddProductModal } from './AddProductModal';
 
 interface DatasetViewProps {
   dataset: DatasetRow[];
@@ -90,6 +95,42 @@ export const DatasetView: React.FC<DatasetViewProps> = ({
   const [editingColName, setEditingColName] = useState<string | null>(null);
   const [newColTitle, setNewColTitle] = useState('');
   const [copiedCol, setCopiedCol] = useState<string | null>(null);
+  const [isAddProductModalOpen, setIsAddProductModalOpen] = useState(false);
+
+  // Compute effective columns dynamically based on existing columns or template variables
+  const effectiveColumns = React.useMemo(() => {
+    if (columnOrder.length > 0) return columnOrder;
+    const fromTemplate = getTemplateColumnKeys(template, elements);
+    if (fromTemplate.length > 0) return fromTemplate;
+    return ['Model', 'DungLuong', 'MauSac', 'IMEI', 'Gia'];
+  }, [columnOrder, template, elements]);
+
+  const handleAddProduct = (product: DatasetRow, continueAdding = false) => {
+    onSetDataset((prev) => [...prev, product]);
+    const keys = Object.keys(product);
+    setColumnOrder((prev) => {
+      const missing = keys.filter((k) => !prev.includes(k));
+      return missing.length > 0 ? [...prev, ...missing] : prev;
+    });
+    showToast(
+      'Đã thêm sản phẩm thành công!',
+      `Đã thêm "${product.Model || product.Ten_SP || 'Sản phẩm mới'}" vào danh sách in tem.`,
+      'success'
+    );
+  };
+
+  const handleLoadSampleDataset = () => {
+    const sampleRows = getSamplePhoneShopData(elements, template);
+    onSetDataset(sampleRows);
+    if (sampleRows.length > 0) {
+      setColumnOrder(Object.keys(sampleRows[0]));
+    }
+    showToast(
+      'Đã nạp dữ liệu mẫu!',
+      `Đã nạp thành công ${sampleRows.length} sản phẩm điện thoại mẫu sẵn sàng in tem.`,
+      'success'
+    );
+  };
 
   // Scanner & OCR State
   const [scannerTarget, setScannerTarget] = useState<ScanTargetInfo | null>(null);
@@ -356,11 +397,22 @@ export const DatasetView: React.FC<DatasetViewProps> = ({
 
   // Add Row
   const handleAddRow = () => {
+    const cols = columnOrder.length > 0 ? columnOrder : effectiveColumns;
     const newRow: DatasetRow = {};
-    columnOrder.forEach((h) => {
-      newRow[h] = h === 'Gia' ? 10000000 : `SP_${Date.now().toString().slice(-4)}`;
+    cols.forEach((h) => {
+      const lower = h.toLowerCase();
+      if (lower.includes('gia') || lower.includes('price')) {
+        newRow[h] = 10000000;
+      } else if (lower.includes('imei')) {
+        newRow[h] = '35' + Math.floor(1000000000000 + Math.random() * 9000000000000).toString();
+      } else {
+        newRow[h] = `SP_${Date.now().toString().slice(-4)}`;
+      }
     });
     onSetDataset((prev) => [...prev, newRow]);
+    if (columnOrder.length === 0) {
+      setColumnOrder(cols);
+    }
     showToast('Thêm dòng thành công', 'Đã chèn 1 dòng sản phẩm mới.', 'success');
   };
 
@@ -555,32 +607,115 @@ export const DatasetView: React.FC<DatasetViewProps> = ({
 
   if (!dataset.length) {
     return (
-      <div className="flex-1 bg-slate-100 dark:bg-slate-950 p-8 flex flex-col items-center justify-center text-center">
-        <div className="w-16 h-16 rounded-2xl bg-blue-100 text-blue-600 dark:bg-blue-950 dark:text-blue-400 flex items-center justify-center mb-4">
-          <Database className="w-8 h-8" />
+      <div className="flex-1 bg-slate-100 dark:bg-slate-950 p-4 sm:p-8 flex flex-col items-center justify-center text-center overflow-y-auto">
+        <div className="max-w-md w-full bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-3xl p-6 sm:p-8 shadow-xl text-center space-y-5">
+          <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-violet-600 text-white flex items-center justify-center mx-auto shadow-lg shadow-blue-500/25">
+            <Database className="w-8 h-8" />
+          </div>
+
+          <div>
+            <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100">
+              Chưa Có Bảng Dữ Liệu Sản Phẩm
+            </h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
+              Bạn có thể thêm sản phẩm thủ công, nạp ngay dữ liệu mẫu điện thoại, hoặc nhập file Excel để in tem.
+            </p>
+          </div>
+
+          {/* Main Action Buttons */}
+          <div className="space-y-2.5 pt-1">
+            {/* Primary: Add Product Directly */}
+            <button
+              onClick={() => setIsAddProductModalOpen(true)}
+              className="w-full flex items-center justify-center gap-2 px-5 py-3.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-2xl shadow-lg shadow-indigo-500/25 transition-all cursor-pointer text-xs sm:text-sm active:scale-[0.98]"
+            >
+              <Plus className="w-4 h-4 stroke-[2.5]" />
+              <span>Thêm Sản Phẩm Mới (Thủ Công / Quét)</span>
+            </button>
+
+            {/* Quick Load Sample Phone Data */}
+            <button
+              onClick={handleLoadSampleDataset}
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 dark:hover:bg-amber-900/50 border border-amber-200 dark:border-amber-800 text-amber-900 dark:text-amber-200 font-bold rounded-2xl transition-all cursor-pointer text-xs active:scale-[0.98]"
+            >
+              <Sparkles className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+              <span>⚡ Nạp Dữ Liệu Mẫu Điện Thoại (Thử Ngay)</span>
+            </button>
+
+            {/* Camera Scan OCR */}
+            <button
+              onClick={() => {
+                handleAddRow();
+                setTimeout(() => {
+                  handleOpenScanModal(0, effectiveColumns[0] || 'IMEI', '', {});
+                }, 50);
+              }}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-50 dark:bg-blue-950/50 hover:bg-blue-100 dark:hover:bg-blue-900/60 border border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-200 font-semibold rounded-2xl transition-all cursor-pointer text-xs active:scale-[0.98]"
+            >
+              <Scan className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+              <span>📷 Quét Camera / Barcode OCR</span>
+            </button>
+          </div>
+
+          {/* Secondary Excel Options */}
+          <div className="pt-2 border-t border-slate-100 dark:border-slate-800 grid grid-cols-2 gap-2">
+            <button
+              onClick={onOpenImportModal}
+              className="flex items-center justify-center gap-1.5 px-3 py-2.5 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 font-semibold rounded-xl transition-all cursor-pointer text-[11px] sm:text-xs"
+            >
+              <Upload className="w-3.5 h-3.5 shrink-0" />
+              <span>Tải File Excel Lên</span>
+            </button>
+
+            <button
+              onClick={() => generateSamplePhoneShopExcel(elements, template)}
+              className="flex items-center justify-center gap-1.5 px-3 py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-semibold rounded-xl text-[11px] sm:text-xs transition-colors cursor-pointer"
+            >
+              <Download className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+              <span>Tải Excel Mẫu</span>
+            </button>
+          </div>
         </div>
-        <h3 className="text-base font-bold text-slate-800 dark:text-slate-200">
-          Chưa Có Bảng Dữ Liệu Sản Phẩm
-        </h3>
-        <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm mt-1 mb-6 leading-relaxed">
-          Nhập file Excel từ cửa hàng điện thoại để quản lý IMEI, tên máy, dung lượng, màu sắc và giá bán.
-        </p>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={onOpenImportModal}
-            className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-lg shadow-emerald-500/20 transition-all cursor-pointer text-xs"
-          >
-            <Upload className="w-4 h-4" />
-            <span>Tải File Excel Ngay</span>
-          </button>
-          <button
-            onClick={() => generateSamplePhoneShopExcel(elements, template)}
-            className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 font-bold rounded-xl text-xs hover:bg-slate-50 transition-colors cursor-pointer"
-          >
-            <Download className="w-4 h-4 text-emerald-600" />
-            <span>Tải Excel Mẫu (.xlsx)</span>
-          </button>
-        </div>
+
+        {/* Modals available in empty state */}
+        <AddProductModal
+          isOpen={isAddProductModalOpen}
+          onClose={() => setIsAddProductModalOpen(false)}
+          onAddProduct={handleAddProduct}
+          columns={effectiveColumns}
+          template={template}
+          elements={elements}
+          onOpenScanner={(fieldName, currentValue) => {
+            setScannerTarget({
+              rowIndex: dataset.length,
+              fieldName,
+              currentValue,
+              allRowData: {},
+              availableColumns: effectiveColumns,
+            });
+            setIsScannerOpen(true);
+          }}
+        />
+
+        <TextScannerModal
+          isOpen={isScannerOpen}
+          onClose={() => setIsScannerOpen(false)}
+          target={scannerTarget}
+          onApplyValue={handleApplyScannedValue}
+          onApplyMultiFields={handleApplyMultiScannedFields}
+          onAddNewRowWithFields={handleAddNewRowWithFields}
+          onAddMultipleRowsWithFields={handleAddMultipleRowsWithFields}
+        />
+
+        <ConfirmModal
+          state={confirmState}
+          onClose={() => setConfirmState((prev) => ({ ...prev, isOpen: false }))}
+        />
+
+        <ToastNotification
+          state={toastState}
+          onClose={() => setToastState((prev) => ({ ...prev, isOpen: false }))}
+        />
       </div>
     );
   }
@@ -689,13 +824,24 @@ export const DatasetView: React.FC<DatasetViewProps> = ({
             <span className="whitespace-nowrap text-[11px] sm:text-xs">Cột ({activeColumns.length}/{columnOrder.length})</span>
           </button>
 
-          {/* Add Row */}
+          {/* Add Product Modal Opener (Primary) */}
+          <button
+            onClick={() => setIsAddProductModalOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 hover:from-blue-700 hover:to-indigo-700 text-white text-xs font-bold rounded-xl shadow-md shadow-indigo-500/20 cursor-pointer whitespace-nowrap shrink-0 active:scale-95"
+            title="Mở form thêm sản phẩm mới (Có gợi ý & quét camera)"
+          >
+            <Plus className="w-3.5 h-3.5 shrink-0 stroke-[2.5]" />
+            <span className="whitespace-nowrap text-[11px] sm:text-xs">Thêm Sản Phẩm</span>
+          </button>
+
+          {/* Quick Insert Blank Row */}
           <button
             onClick={handleAddRow}
-            className="flex items-center gap-1 px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-xs cursor-pointer whitespace-nowrap shrink-0 active:scale-95"
+            className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-medium rounded-xl cursor-pointer whitespace-nowrap shrink-0 active:scale-95"
+            title="Chèn nhanh 1 dòng trống vào cuối bảng"
           >
-            <Plus className="w-3.5 h-3.5 shrink-0" />
-            <span className="whitespace-nowrap text-[11px] sm:text-xs">Thêm SP</span>
+            <Plus className="w-3 h-3 shrink-0" />
+            <span className="whitespace-nowrap text-[10.5px]">Dòng Trống</span>
           </button>
 
           {/* Import Excel */}
@@ -1198,6 +1344,27 @@ export const DatasetView: React.FC<DatasetViewProps> = ({
           </div>
         </div>
       )}
+
+
+      {/* Add Product Modal */}
+      <AddProductModal
+        isOpen={isAddProductModalOpen}
+        onClose={() => setIsAddProductModalOpen(false)}
+        onAddProduct={handleAddProduct}
+        columns={effectiveColumns}
+        template={template}
+        elements={elements}
+        onOpenScanner={(fieldName, currentValue) => {
+          setScannerTarget({
+            rowIndex: dataset.length,
+            fieldName,
+            currentValue,
+            allRowData: {},
+            availableColumns: effectiveColumns,
+          });
+          setIsScannerOpen(true);
+        }}
+      />
 
       {/* Text & Barcode Scanner Modal */}
       <TextScannerModal

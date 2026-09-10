@@ -303,7 +303,10 @@ export const FloatingDock: React.FC<FloatingDockProps> = ({
   const isEffectivelyVisible = isVisible && !isKeyboardOpen;
 
   return (
-    <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 flex flex-col items-center justify-end pointer-events-none pb-3 sm:pb-5 px-3 sm:px-4 select-none">
+    <div
+      style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 0.75rem)' }}
+      className="md:hidden fixed bottom-0 left-0 right-0 z-40 flex flex-col items-center justify-end pointer-events-none px-3 sm:px-4 select-none pb-safe"
+    >
       {/* ========================================================= */}
       {/* SMART MINI SUMMON PILL (Revealed when dock is hidden by scroll, NOT when keyboard is open) */}
       {/* ========================================================= */}

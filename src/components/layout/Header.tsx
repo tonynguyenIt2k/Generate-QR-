@@ -70,7 +70,10 @@ export const Header: React.FC<HeaderProps> = ({
   };
 
   return (
-    <header className="h-14 sm:h-16 border-b border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md px-2.5 sm:px-4 flex items-center justify-between shadow-xs z-30 shrink-0 gap-2 w-full">
+    <header
+      style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}
+      className="min-h-[3.5rem] sm:min-h-[4rem] border-b border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md px-2.5 sm:px-4 flex items-center justify-between shadow-xs z-30 shrink-0 gap-2 w-full pt-safe transition-colors duration-200"
+    >
       {/* Brand & Active Template Info */}
       <div className="flex items-center gap-2 sm:gap-2.5 min-w-0 flex-1 sm:flex-initial">
         <div className="flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/20 shrink-0">
@@ -132,18 +135,6 @@ export const Header: React.FC<HeaderProps> = ({
 
       {/* MOBILE RIGHT CONTROLS (Right on Mobile) */}
       <div className="flex md:hidden items-center gap-1.5 shrink-0">
-        {onOpenPwaModal && (
-          <button
-            type="button"
-            onClick={onOpenPwaModal}
-            className="flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/80 shadow-xs active:scale-95 transition-all text-xs font-bold cursor-pointer shrink-0"
-            title="Cài đặt và sử dụng toàn màn hình như App native"
-          >
-            <Smartphone className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-            <span>Cài App</span>
-          </button>
-        )}
-
         <button
           type="button"
           onClick={() => setDarkMode(!darkMode)}

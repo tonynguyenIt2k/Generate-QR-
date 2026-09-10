@@ -171,9 +171,9 @@ export async function parseExcelOrCsvFile(file: File): Promise<{ rows: DatasetRo
 }
 
 /**
- * Generates sample Phone Shop Data Excel workbook matching template variables.
+ * Returns structured sample Phone Shop Data matching template variables.
  */
-export function generateSamplePhoneShopExcel(elements?: LabelElement[], template?: LabelTemplate): void {
+export function getSamplePhoneShopData(elements?: LabelElement[], template?: LabelTemplate): DatasetRow[] {
   const fullSampleRows: Record<string, string | number>[] = [
     {
       MaMay: 'IP15P-256-NT',
@@ -211,7 +211,7 @@ export function generateSamplePhoneShopExcel(elements?: LabelElement[], template
       MaMay: 'IP14-128-D',
       Model: 'iPhone 14',
       DungLuong: '128GB',
-      MauSac: 'Đen Huyền Bổ',
+      MauSac: 'Đen Huyền Bí',
       IMEI: '354321098765432',
       Serial: 'F12K0019283',
       Gia: 16990000,
@@ -223,6 +223,22 @@ export function generateSamplePhoneShopExcel(elements?: LabelElement[], template
       STK: '190377777777',
       NganHang: 'MBBank',
     },
+    {
+      MaMay: 'IP13-128-X',
+      Model: 'iPhone 13 128GB',
+      DungLuong: '128GB',
+      MauSac: 'Xanh Midnight',
+      IMEI: '359871029384756',
+      Serial: 'K98PLX0192M',
+      Gia: 13490000,
+      NhaManh: 'Chính Hãng VN/A',
+      BaoHanh: '12 Tháng',
+      MaKho: 'KHO-DANANG-01',
+      TenShop: 'APPLE STORE',
+      Website: 'apple.vn',
+      STK: '190366666666',
+      NganHang: 'Vietinbank',
+    },
   ];
 
   let keysToInclude: string[] = [];
@@ -230,32 +246,38 @@ export function generateSamplePhoneShopExcel(elements?: LabelElement[], template
     keysToInclude = getTemplateColumnKeys(template, elements);
   }
 
-  let finalSampleData: Record<string, string | number>[] = [];
-
   if (keysToInclude.length > 0) {
-    // Dynamically filter columns to match ONLY variables present in current template
-    finalSampleData = fullSampleRows.map((row) => {
+    return fullSampleRows.map((row) => {
       const filteredRow: Record<string, string | number> = {};
       keysToInclude.forEach((key) => {
         filteredRow[key] = row[key] !== undefined ? row[key] : (template?.sampleData?.[key] ?? `Mẫu ${key}`);
       });
       return filteredRow;
     });
-  } else {
-    // Default 10 standard columns
-    finalSampleData = fullSampleRows.map((row) => ({
-      MaMay: row.MaMay,
-      Model: row.Model,
-      DungLuong: row.DungLuong,
-      MauSac: row.MauSac,
-      IMEI: row.IMEI,
-      Serial: row.Serial,
-      Gia: row.Gia,
-      NhaManh: row.NhaManh,
-      BaoHanh: row.BaoHanh,
-      MaKho: row.MaKho,
-    }));
   }
+
+  return fullSampleRows.map((row) => ({
+    MaMay: row.MaMay,
+    Model: row.Model,
+    DungLuong: row.DungLuong,
+    MauSac: row.MauSac,
+    IMEI: row.IMEI,
+    Serial: row.Serial,
+    Gia: row.Gia,
+    NhaManh: row.NhaManh,
+    BaoHanh: row.BaoHanh,
+    MaKho: row.MaKho,
+  }));
+}
+
+/**
+ * Generates sample Phone Shop Data Excel workbook matching template variables.
+ */
+export function generateSamplePhoneShopExcel(elements?: LabelElement[], template?: LabelTemplate): void {
+  const finalSampleData = getSamplePhoneShopData(elements, template);
+  const keysToInclude = (template || (elements && elements.length > 0))
+    ? getTemplateColumnKeys(template, elements)
+    : [];
 
   const worksheet = XLSX.utils.json_to_sheet(finalSampleData);
   const workbook = XLSX.utils.book_new();
