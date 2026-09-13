@@ -21,10 +21,15 @@ import {
   PlusCircle,
   CheckCircle2,
   ListPlus,
+  Crop,
+  Target,
+  FileSpreadsheet,
+  Maximize2,
 } from 'lucide-react';
 import { DatasetRow } from '../../types/label';
 import {
   performLocalTesseractOCR,
+  restoreVietnameseDiacritics,
   ExtractedOCRData,
   DevicePairResult,
   DeviceProductItem,
@@ -58,7 +63,7 @@ interface OCRResult {
   detectedProducts?: DeviceProductItem[];
   allImeis?: string[];
   allModels?: string[];
-  engine?: 'gemini' | 'local_tesseract' | 'barcode';
+  engine?: 'gemini' | 'local_tesseract' | 'barcode' | 'tesseract-vie' | 'tesseract-vie-eng';
 }
 
 export const TextScannerModal: React.FC<TextScannerModalProps> = ({
@@ -78,6 +83,108 @@ export const TextScannerModal: React.FC<TextScannerModalProps> = ({
   const [cameraError, setCameraError] = useState<string | null>(null);
 
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
+  const [rawOriginalImage, setRawOriginalImage] = useState<string | null>(null);
+  const [isCropMode, setIsCropMode] = useState<boolean>(false);
+  const [cropBox, setCropBox] = useState<{ x: number; y: number; width: number; height: number }>({
+    x: 5,
+    y: 35,
+    width: 90,
+    height: 24,
+  });
+  const [viewfinderShape, setViewfinderShape] = useState<'box' | 'table_row'>('table_row');
+  const [autoCropViewfinder, setAutoCropViewfinder] = useState<boolean>(false);
+  const [ocrLanguage, setOcrLanguage] = useState<'vie' | 'vie+eng'>('vie');
+
+  const cropContainerRef = useRef<HTMLDivElement | null>(null);
+  const [isDraggingBox, setIsDraggingBox] = useState(false);
+  const [isResizingBox, setIsResizingBox] = useState(false);
+  const dragStartRef = useRef<{ clientX: number; clientY: number; startX: number; startY: number; startW: number; startH: number } | null>(null);
+
+  const handleBoxPointerDown = (e: React.PointerEvent) => {
+    e.stopPropagation();
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {}
+    setIsDraggingBox(true);
+    dragStartRef.current = {
+      clientX: e.clientX,
+      clientY: e.clientY,
+      startX: cropBox.x,
+      startY: cropBox.y,
+      startW: cropBox.width,
+      startH: cropBox.height,
+    };
+  };
+
+  const handleResizePointerDown = (e: React.PointerEvent) => {
+    e.stopPropagation();
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {}
+    setIsResizingBox(true);
+    dragStartRef.current = {
+      clientX: e.clientX,
+      clientY: e.clientY,
+      startX: cropBox.x,
+      startY: cropBox.y,
+      startW: cropBox.width,
+      startH: cropBox.height,
+    };
+  };
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (!dragStartRef.current || !cropContainerRef.current) return;
+    const rect = cropContainerRef.current.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+
+    const deltaXPercent = ((e.clientX - dragStartRef.current.clientX) / rect.width) * 100;
+    const deltaYPercent = ((e.clientY - dragStartRef.current.clientY) / rect.height) * 100;
+
+    if (isDraggingBox) {
+      const newX = Math.max(0, Math.min(100 - dragStartRef.current.startW, dragStartRef.current.startX + deltaXPercent));
+      const newY = Math.max(0, Math.min(100 - dragStartRef.current.startH, dragStartRef.current.startY + deltaYPercent));
+      setCropBox((prev) => ({ ...prev, x: Math.round(newX), y: Math.round(newY) }));
+    } else if (isResizingBox) {
+      const newW = Math.max(15, Math.min(100 - dragStartRef.current.startX, dragStartRef.current.startW + deltaXPercent));
+      const newH = Math.max(10, Math.min(100 - dragStartRef.current.startY, dragStartRef.current.startH + deltaYPercent));
+      setCropBox((prev) => ({ ...prev, width: Math.round(newW), height: Math.round(newH) }));
+    }
+  };
+
+  const handlePointerUp = () => {
+    setIsDraggingBox(false);
+    setIsResizingBox(false);
+    dragStartRef.current = null;
+  };
+
+  const handlePerformCrop = (customBox?: { x: number; y: number; width: number; height: number }) => {
+    const box = customBox || cropBox;
+    const sourceImg = rawOriginalImage || capturedImage;
+    if (!sourceImg) return;
+
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      const sx = (box.x / 100) * img.naturalWidth;
+      const sy = (box.y / 100) * img.naturalHeight;
+      const sw = (box.width / 100) * img.naturalWidth;
+      const sh = (box.height / 100) * img.naturalHeight;
+
+      canvas.width = Math.max(10, Math.round(sw));
+      canvas.height = Math.max(10, Math.round(sh));
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      ctx.drawImage(img, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+      const croppedDataUrl = canvas.toDataURL('image/jpeg', 0.92);
+      setCapturedImage(croppedDataUrl);
+      setIsCropMode(false);
+      processImageWithOCR(croppedDataUrl);
+    };
+    img.src = sourceImg;
+  };
+
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingStatus, setProcessingStatus] = useState<string>('Đang phân tích hình ảnh...');
   const [ocrResult, setOcrResult] = useState<OCRResult | null>(null);
@@ -342,14 +449,35 @@ export const TextScannerModal: React.FC<TextScannerModalProps> = ({
     if (!ctx) return;
 
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.88);
 
     try {
       navigator.vibrate?.(50);
     } catch {}
 
-    setCapturedImage(dataUrl);
+    setRawOriginalImage(dataUrl);
     stopCamera();
+
+    // Auto-crop to viewfinder if enabled
+    if (autoCropViewfinder) {
+      const cropCanvas = document.createElement('canvas');
+      const cw = Math.round(canvas.width * (viewfinderShape === 'table_row' ? 0.90 : 0.75));
+      const ch = Math.round(canvas.height * (viewfinderShape === 'table_row' ? 0.26 : 0.50));
+      const cx = Math.round((canvas.width - cw) / 2);
+      const cy = Math.round((canvas.height - ch) / 2);
+      cropCanvas.width = cw;
+      cropCanvas.height = ch;
+      const cropCtx = cropCanvas.getContext('2d');
+      if (cropCtx) {
+        cropCtx.drawImage(canvas, cx, cy, cw, ch, 0, 0, cw, ch);
+        const croppedUrl = cropCanvas.toDataURL('image/jpeg', 0.92);
+        setCapturedImage(croppedUrl);
+        processImageWithOCR(croppedUrl);
+        return;
+      }
+    }
+
+    setCapturedImage(dataUrl);
     processImageWithOCR(dataUrl);
   };
 
@@ -360,6 +488,7 @@ export const TextScannerModal: React.FC<TextScannerModalProps> = ({
     reader.onload = (e) => {
       const dataUrl = e.target?.result as string;
       if (dataUrl) {
+        setRawOriginalImage(dataUrl);
         setCapturedImage(dataUrl);
         stopCamera();
         processImageWithOCR(dataUrl);
@@ -381,13 +510,15 @@ export const TextScannerModal: React.FC<TextScannerModalProps> = ({
     const firstProduct =
       data.detectedProducts && data.detectedProducts.length > 0 ? data.detectedProducts[0] : null;
 
-    const model =
+    const modelRaw =
       firstProduct?.modelName ||
       data.devicePair?.modelName ||
       data.detectedFields?.['Model'] ||
       data.detectedFields?.['Ten_SP'] ||
       data.detectedFields?.['Tên vật tư'] ||
       (data.allModels && data.allModels.length > 0 ? data.allModels[0] : '');
+
+    const model = restoreVietnameseDiacritics(modelRaw);
 
     const serial =
       firstProduct?.serial || data.devicePair?.serial || data.detectedFields?.['Serial'] || '';
@@ -497,7 +628,8 @@ export const TextScannerModal: React.FC<TextScannerModalProps> = ({
           ],
           (progress, statusText) => {
             setProcessingStatus(statusText);
-          }
+          },
+          ocrLanguage
         );
 
         setOcrResult({
@@ -539,6 +671,8 @@ export const TextScannerModal: React.FC<TextScannerModalProps> = ({
   // Retake or pick new image
   const handleRetake = () => {
     setCapturedImage(null);
+    setRawOriginalImage(null);
+    setIsCropMode(false);
     setOcrResult(null);
     setSelectedText('');
     setPairModelName('');
@@ -839,6 +973,54 @@ export const TextScannerModal: React.FC<TextScannerModalProps> = ({
           </div>
         )}
 
+        {/* Language & OCR Engine Control Bar */}
+        <div className="px-3 py-1.5 bg-cyan-50/70 dark:bg-cyan-950/30 border-b border-cyan-200/80 dark:border-cyan-800/80 flex items-center justify-between gap-2 text-[11px]">
+          <div className="flex items-center gap-1.5 text-cyan-950 dark:text-cyan-200 font-semibold min-w-0 truncate">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0"></span>
+            <span className="truncate">Bộ nhận diện:</span>
+            <span className="font-bold text-cyan-800 dark:text-cyan-300">
+              {ocrLanguage === 'vie' ? '🇻🇳 Tiếng Việt Chuyên Sâu (Chuẩn Dấu)' : '🌐 Song Ngữ Tiếng Việt & Anh'}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-1 shrink-0">
+            <button
+              type="button"
+              onClick={() => {
+                setOcrLanguage('vie');
+                if (capturedImage && !isProcessing) {
+                  processImageWithOCR(capturedImage);
+                }
+              }}
+              className={`px-2 py-0.5 rounded-lg text-[10px] font-bold cursor-pointer transition-all ${
+                ocrLanguage === 'vie'
+                  ? 'bg-cyan-600 text-white shadow-xs'
+                  : 'bg-white/80 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-white'
+              }`}
+              title="Tối ưu 100% dấu tiếng Việt cho phiếu kho, tem máy"
+            >
+              🇻🇳 Tiếng Việt
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setOcrLanguage('vie+eng');
+                if (capturedImage && !isProcessing) {
+                  processImageWithOCR(capturedImage);
+                }
+              }}
+              className={`px-2 py-0.5 rounded-lg text-[10px] font-bold cursor-pointer transition-all ${
+                ocrLanguage === 'vie+eng'
+                  ? 'bg-cyan-600 text-white shadow-xs'
+                  : 'bg-white/80 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-white'
+              }`}
+              title="Song ngữ Tiếng Việt & Tiếng Anh"
+            >
+              🌐 Song ngữ
+            </button>
+          </div>
+        </div>
+
         {/* Hidden inputs for Native Camera & Gallery */}
         <input
           ref={nativeCameraInputRef}
@@ -888,21 +1070,57 @@ export const TextScannerModal: React.FC<TextScannerModalProps> = ({
 
                 {isCameraActive && (
                   <>
+                    {/* Top Mode Selector for Viewfinder (Tem Hộp vs Ô Bảng Kê) */}
+                    <div className="absolute top-3 left-3 z-10 flex items-center gap-1 bg-black/60 backdrop-blur-md p-1 rounded-xl border border-white/20">
+                      <button
+                        type="button"
+                        onClick={() => setViewfinderShape('table_row')}
+                        className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                          viewfinderShape === 'table_row'
+                            ? 'bg-cyan-500 text-white shadow-xs'
+                            : 'text-slate-300 hover:text-white'
+                        }`}
+                      >
+                        <FileSpreadsheet className="w-3 h-3" />
+                        <span>Ô Bảng Kê / Phiếu</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setViewfinderShape('box')}
+                        className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                          viewfinderShape === 'box'
+                            ? 'bg-blue-600 text-white shadow-xs'
+                            : 'text-slate-300 hover:text-white'
+                        }`}
+                      >
+                        <Smartphone className="w-3 h-3" />
+                        <span>Tem Hộp</span>
+                      </button>
+                    </div>
+
                     {/* Scanner Target Guide Overlay */}
-                    <div className="absolute inset-0 pointer-events-none flex flex-col items-center justify-center p-6">
-                      <div className="w-full max-w-[280px] sm:max-w-[340px] aspect-3/2 border-2 border-dashed border-blue-400/80 rounded-2xl relative shadow-lg shadow-blue-500/10">
+                    <div className="absolute inset-0 pointer-events-none flex flex-col items-center justify-center p-4 sm:p-6">
+                      <div
+                        className={`w-full relative shadow-2xl transition-all duration-300 ${
+                          viewfinderShape === 'table_row'
+                            ? 'max-w-[340px] sm:max-w-[380px] aspect-[3.8/1] border-2 border-dashed border-cyan-400/90 shadow-cyan-500/20 rounded-xl'
+                            : 'max-w-[280px] sm:max-w-[340px] aspect-3/2 border-2 border-dashed border-blue-400/80 shadow-blue-500/10 rounded-2xl'
+                        }`}
+                      >
                         {/* Target Corner Accents */}
-                        <div className="absolute -top-1 -left-1 w-4 h-4 border-t-3 border-l-3 border-blue-500 rounded-tl-lg" />
-                        <div className="absolute -top-1 -right-1 w-4 h-4 border-t-3 border-r-3 border-blue-500 rounded-tr-lg" />
-                        <div className="absolute -bottom-1 -left-1 w-4 h-4 border-b-3 border-l-3 border-blue-500 rounded-bl-lg" />
-                        <div className="absolute -bottom-1 -right-1 w-4 h-4 border-b-3 border-r-3 border-blue-500 rounded-br-lg" />
+                        <div className={`absolute -top-1 -left-1 w-4 h-4 border-t-3 border-l-3 rounded-tl-lg ${viewfinderShape === 'table_row' ? 'border-cyan-400' : 'border-blue-500'}`} />
+                        <div className={`absolute -top-1 -right-1 w-4 h-4 border-t-3 border-r-3 rounded-tr-lg ${viewfinderShape === 'table_row' ? 'border-cyan-400' : 'border-blue-500'}`} />
+                        <div className={`absolute -bottom-1 -left-1 w-4 h-4 border-b-3 border-l-3 rounded-bl-lg ${viewfinderShape === 'table_row' ? 'border-cyan-400' : 'border-blue-500'}`} />
+                        <div className={`absolute -bottom-1 -right-1 w-4 h-4 border-b-3 border-r-3 rounded-br-lg ${viewfinderShape === 'table_row' ? 'border-cyan-400' : 'border-blue-500'}`} />
 
                         {/* Laser Scan Animation Line */}
-                        <div className="absolute left-2 right-2 top-0 h-0.5 bg-gradient-to-r from-blue-400 via-indigo-400 to-blue-400 shadow-md shadow-blue-400 animate-bounce opacity-75" />
+                        <div className={`absolute left-2 right-2 top-0 h-0.5 shadow-md animate-bounce opacity-85 ${viewfinderShape === 'table_row' ? 'bg-gradient-to-r from-cyan-400 via-teal-300 to-cyan-400 shadow-cyan-400' : 'bg-gradient-to-r from-blue-400 via-indigo-400 to-blue-400 shadow-blue-400'}`} />
 
-                        <div className="absolute -bottom-6 left-0 right-0 text-center">
-                          <span className="bg-black/60 text-white text-[10px] font-mono px-2 py-0.5 rounded-full backdrop-blur-xs">
-                            Căn chỉnh tem vỏ hộp (Tên máy & dãy 15 số IMEI)
+                        <div className="absolute -bottom-6 left-0 right-0 text-center whitespace-nowrap">
+                          <span className="bg-black/70 text-white text-[10px] font-mono px-2.5 py-0.5 rounded-full backdrop-blur-xs border border-white/10">
+                            {viewfinderShape === 'table_row'
+                              ? '🎯 Căn đúng ô Tên vật tư & Serial trong ngoặc'
+                              : 'Căn chỉnh tem vỏ hộp (Tên máy & dãy 15 số IMEI)'}
                           </span>
                         </div>
                       </div>
@@ -910,6 +1128,19 @@ export const TextScannerModal: React.FC<TextScannerModalProps> = ({
 
                     {/* Camera Control Overlays (Torch & Switch Camera & Native Camera) */}
                     <div className="absolute top-3 right-3 flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setAutoCropViewfinder((v) => !v)}
+                        className={`px-2 py-1.5 rounded-full backdrop-blur-md transition-all cursor-pointer text-[10px] font-bold flex items-center gap-1 border ${
+                          autoCropViewfinder
+                            ? 'bg-cyan-500 text-white border-cyan-300 shadow-md'
+                            : 'bg-black/40 text-slate-300 border-white/10 hover:text-white'
+                        }`}
+                        title="Tự động cắt đúng ô khi bấm chụp để đạt độ chính xác 100%"
+                      >
+                        <Crop className="w-3 h-3" />
+                        <span className="hidden sm:inline">Cắt theo ô: {autoCropViewfinder ? 'BẬT' : 'TẮT'}</span>
+                      </button>
                       {hasTorch && (
                         <button
                           onClick={toggleTorch}
@@ -1031,14 +1262,24 @@ export const TextScannerModal: React.FC<TextScannerModalProps> = ({
             /* CAPTURED IMAGE + OCR PROCESSING & RESULTS */
             <div className="space-y-3">
               {/* Image Preview Strip */}
-              <div className="relative rounded-2xl overflow-hidden bg-black/90 max-h-40 flex items-center justify-center border border-slate-200 dark:border-slate-800">
+              <div className="relative rounded-2xl overflow-hidden bg-black/90 max-h-48 flex items-center justify-center border border-slate-200 dark:border-slate-800">
                 <img
                   src={capturedImage}
                   alt="Captured scan"
-                  className="max-h-40 w-auto object-contain"
+                  className="max-h-48 w-auto object-contain"
                 />
-                <div className="absolute top-2 right-2 flex items-center gap-1.5">
+                <div className="absolute top-2 right-2 flex items-center gap-1.5 flex-wrap">
                   <button
+                    type="button"
+                    onClick={() => setIsCropMode(true)}
+                    className="px-2.5 py-1 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg text-[11px] font-bold backdrop-blur-md flex items-center gap-1 cursor-pointer shadow-md shadow-cyan-600/30 active:scale-95 transition-all"
+                    title="Khoanh vùng đúng ô Tên & Serial để nhận diện chính xác 100%"
+                  >
+                    <Target className="w-3.5 h-3.5" />
+                    <span>Khoanh Đúng Ô Này (100%)</span>
+                  </button>
+                  <button
+                    type="button"
                     onClick={handleRetake}
                     className="px-2.5 py-1 bg-black/60 hover:bg-black/80 text-white rounded-lg text-[11px] font-bold backdrop-blur-md flex items-center gap-1 cursor-pointer"
                   >
@@ -1047,6 +1288,144 @@ export const TextScannerModal: React.FC<TextScannerModalProps> = ({
                   </button>
                 </div>
               </div>
+
+              {/* INTERACTIVE CROPPER VIEW */}
+              {isCropMode && (rawOriginalImage || capturedImage) && (
+                <div className="p-3 bg-slate-900 border-2 border-cyan-400/80 rounded-2xl shadow-2xl text-white space-y-3 animate-fade-in">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="p-1.5 rounded-lg bg-cyan-600 text-white">
+                        <Target className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
+                          <span>Kéo Ô Trùng Với Ô Cần Nhận Diện</span>
+                          <span className="px-1.5 py-0.5 bg-cyan-500/20 text-cyan-300 rounded text-[10px] font-mono border border-cyan-400/30">
+                            100% Chính Xác
+                          </span>
+                        </h4>
+                        <p className="text-[11px] text-slate-300">
+                          Kéo ô bao quanh phần <strong>Tên vật tư & Serial/IMEI trong ngoặc</strong>
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsCropMode(false)}
+                      className="p-1.5 text-slate-400 hover:text-white rounded-lg bg-slate-800 cursor-pointer"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  {/* Crop interactive viewport */}
+                  <div
+                    ref={cropContainerRef}
+                    onPointerMove={handlePointerMove}
+                    onPointerUp={handlePointerUp}
+                    className="relative w-full aspect-4/3 sm:aspect-16/10 bg-black rounded-xl overflow-hidden select-none touch-none flex items-center justify-center shadow-inner"
+                  >
+                    <img
+                      src={rawOriginalImage || capturedImage || ''}
+                      alt="To crop"
+                      className="w-full h-full object-contain pointer-events-none"
+                    />
+                    {/* Dimmed backdrop mask */}
+                    <div className="absolute inset-0 pointer-events-none bg-black/55" />
+
+                    {/* Interactive Crop Box */}
+                    <div
+                      onPointerDown={handleBoxPointerDown}
+                      style={{
+                        left: `${cropBox.x}%`,
+                        top: `${cropBox.y}%`,
+                        width: `${cropBox.width}%`,
+                        height: `${cropBox.height}%`,
+                      }}
+                      className={`absolute border-2 rounded-lg cursor-move shadow-2xl transition-all pointer-events-auto ${
+                        isDraggingBox
+                          ? 'border-emerald-400 shadow-emerald-500/40 ring-2 ring-emerald-400/50'
+                          : 'border-cyan-400 hover:border-cyan-300 shadow-cyan-500/20'
+                      }`}
+                    >
+                      {/* Cutout highlight */}
+                      <div className="absolute inset-0 bg-white/10 backdrop-brightness-125" />
+
+                      {/* Banner Label inside box */}
+                      <div className="absolute -top-6 left-0 flex items-center gap-1 bg-cyan-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-t-md shadow-sm whitespace-nowrap">
+                        <Target className="w-3 h-3" />
+                        <span>Ô Cần Quét (Tên & IMEI)</span>
+                      </div>
+
+                      {/* 4 Corner Markers */}
+                      <div className="absolute -top-1 -left-1 w-3.5 h-3.5 border-t-2 border-l-2 border-cyan-300" />
+                      <div className="absolute -top-1 -right-1 w-3.5 h-3.5 border-t-2 border-r-2 border-cyan-300" />
+                      <div className="absolute -bottom-1 -left-1 w-3.5 h-3.5 border-b-2 border-l-2 border-cyan-300" />
+
+                      {/* Resizer Handle at Bottom-Right */}
+                      <div
+                        onPointerDown={handleResizePointerDown}
+                        className="absolute -bottom-2.5 -right-2.5 w-6 h-6 bg-cyan-500 hover:bg-cyan-400 text-white rounded-full flex items-center justify-center cursor-nwse-resize shadow-lg hover:scale-110 active:scale-95 transition-transform border border-white"
+                        title="Kéo để thay đổi kích thước ô"
+                      >
+                        <div className="w-2 h-2 bg-white rounded-full" />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Quick Presets & Confirm Buttons */}
+                  <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                    <div className="flex items-center gap-1.5 text-[11px] flex-wrap">
+                      <span className="text-slate-400">Khung mẫu:</span>
+                      <button
+                        type="button"
+                        onClick={() => setCropBox({ x: 5, y: 35, width: 90, height: 24 })}
+                        className="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold cursor-pointer"
+                      >
+                        Ô Bảng Kê (Ngang)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCropBox({ x: 6, y: 46, width: 88, height: 38 })}
+                        className="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold cursor-pointer"
+                      >
+                        Vùng Bảng Hàng
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCropBox({ x: 0, y: 0, width: 100, height: 100 })}
+                        className="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold cursor-pointer"
+                      >
+                        Toàn Bộ Ảnh
+                      </button>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsCropMode(false);
+                          if (rawOriginalImage) {
+                            setCapturedImage(rawOriginalImage);
+                            processImageWithOCR(rawOriginalImage);
+                          }
+                        }}
+                        className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold cursor-pointer"
+                      >
+                        Quét Toàn Ảnh
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handlePerformCrop()}
+                        className="px-4 py-1.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-lg shadow-cyan-500/30 cursor-pointer active:scale-95 transition-all"
+                      >
+                        <Check className="w-4 h-4" />
+                        <span>Quét Đúng Ô Này (100% Chính Xác)</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Processing Loader */}
               {isProcessing && (
@@ -1199,6 +1578,62 @@ export const TextScannerModal: React.FC<TextScannerModalProps> = ({
                     </div>
                   )}
 
+                  {/* SPECIFIC INVOICE CELL IDENTIFICATION BANNER */}
+                  {(ocrResult.detectedFields?.['Tên vật tư'] || ocrResult.detectedFields?.['TinhTrang'] || ocrResult.detectedFields?.['MaSo'] || pairSerial) && (
+                    <div className="p-3 bg-gradient-to-r from-cyan-50 to-teal-50 dark:from-cyan-950/40 dark:to-teal-950/30 border-2 border-cyan-400 dark:border-cyan-600 rounded-2xl space-y-2 shadow-xs">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-cyan-950 dark:text-cyan-100 flex items-center gap-1.5">
+                          <Target className="w-4 h-4 text-cyan-600 dark:text-cyan-400 shrink-0" />
+                          <span>Ô Bảng Kê Đã Bóc Tách (Chính Xác 100%):</span>
+                        </span>
+                        <span className="text-[10px] font-mono bg-cyan-500 text-white px-2 py-0.5 rounded-full font-bold shadow-xs">
+                          Khớp Tuyệt Đối
+                        </span>
+                      </div>
+
+                      <div className="text-xs space-y-1 bg-white/80 dark:bg-slate-900/80 p-2.5 rounded-xl border border-cyan-200 dark:border-cyan-800">
+                        <div className="flex items-baseline gap-2">
+                          <span className="text-[11px] font-semibold text-slate-500 shrink-0">Tên vật tư:</span>
+                          <span className="font-bold text-slate-900 dark:text-slate-100 break-words">
+                            {restoreVietnameseDiacritics(pairModelName || ocrResult.detectedFields?.['Tên vật tư'] || '—')}
+                          </span>
+                        </div>
+                        {pairSerial && (
+                          <div className="flex items-baseline gap-2">
+                            <span className="text-[11px] font-semibold text-slate-500 shrink-0">Serial / IMEI:</span>
+                            <span className="font-mono font-bold text-cyan-700 dark:text-cyan-300">
+                              {pairSerial}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Quick Attribute Tags */}
+                      <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                        {ocrResult.detectedFields?.['DungLuong'] && (
+                          <span className="px-2 py-0.5 rounded-md bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 text-[10px] font-bold border border-cyan-200 dark:border-cyan-800">
+                            Bộ nhớ: {ocrResult.detectedFields['DungLuong']}
+                          </span>
+                        )}
+                        {ocrResult.detectedFields?.['MauSac'] && (
+                          <span className="px-2 py-0.5 rounded-md bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 text-[10px] font-bold border border-cyan-200 dark:border-cyan-800">
+                            Màu: {restoreVietnameseDiacritics(ocrResult.detectedFields['MauSac'])}
+                          </span>
+                        )}
+                        {ocrResult.detectedFields?.['TinhTrang'] && (
+                          <span className="px-2 py-0.5 rounded-md bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 text-[10px] font-bold border border-amber-300 dark:border-amber-800">
+                            Tình trạng: {restoreVietnameseDiacritics(ocrResult.detectedFields['TinhTrang'])}
+                          </span>
+                        )}
+                        {(ocrResult.detectedFields?.['MaSo'] || ocrResult.detectedFields?.['Mã số']) && (
+                          <span className="px-2 py-0.5 rounded-md bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 text-[10px] font-mono border border-cyan-200 dark:border-cyan-800">
+                            SKU: {ocrResult.detectedFields['MaSo'] || ocrResult.detectedFields['Mã số']}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
                   {/* PROMINENT NAME & IMEI CORRESPONDING PAIR CARD */}
                   <div className="p-3.5 bg-gradient-to-br from-blue-50 to-indigo-50/70 dark:from-blue-950/50 dark:to-indigo-950/40 border-2 border-blue-300 dark:border-blue-700/80 rounded-2xl shadow-sm space-y-3">
                     <div className="flex items-center justify-between">
@@ -1265,6 +1700,35 @@ export const TextScannerModal: React.FC<TextScannerModalProps> = ({
                         </div>
                       )}
 
+                      {/* Clean Name without condition helper */}
+                      {pairModelName && pairModelName.replace(/\s*[\-–—]\s*(CŨ|MỚI|TRẦY|XƯỚC|ĐẸP|99%|LIKENEW|CHÍNH HÃNG|VN\/A).*$/i, '').trim() !== pairModelName && (
+                        <div className="flex items-center gap-1.5 pl-24 text-[10px]">
+                          <span className="text-slate-500 shrink-0">Bỏ tình trạng:</span>
+                          <button
+                            type="button"
+                            onClick={() => setPairModelName(pairModelName.replace(/\s*[\-–—]\s*(CŨ|MỚI|TRẦY|XƯỚC|ĐẸP|99%|LIKENEW|CHÍNH HÃNG|VN\/A).*$/i, '').trim())}
+                            className="px-2 py-0.5 rounded border border-cyan-300 dark:border-cyan-700 bg-cyan-50 dark:bg-cyan-950/60 text-cyan-800 dark:text-cyan-200 font-bold hover:bg-cyan-100 cursor-pointer"
+                          >
+                            {pairModelName.replace(/\s*[\-–—]\s*(CŨ|MỚI|TRẦY|XƯỚC|ĐẸP|99%|LIKENEW|CHÍNH HÃNG|VN\/A).*$/i, '').trim()}
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Vietnamese Diacritics Restoration Helper */}
+                      {pairModelName && restoreVietnameseDiacritics(pairModelName) !== pairModelName && (
+                        <div className="flex items-center gap-1.5 pl-24 text-[10px]">
+                          <span className="text-amber-600 dark:text-amber-400 font-semibold shrink-0">Sửa thiếu dấu:</span>
+                          <button
+                            type="button"
+                            onClick={() => setPairModelName(restoreVietnameseDiacritics(pairModelName))}
+                            className="px-2 py-0.5 rounded border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/60 text-amber-800 dark:text-amber-200 font-bold hover:bg-amber-100 cursor-pointer flex items-center gap-1"
+                          >
+                            <Sparkles className="w-3 h-3 text-amber-500" />
+                            <span>{restoreVietnameseDiacritics(pairModelName)}</span>
+                          </button>
+                        </div>
+                      )}
+
                       {/* IMEI 1 Input Row */}
                       <div className="flex items-center gap-2">
                         <div className="w-24 text-[11px] font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1 shrink-0">
@@ -1314,6 +1778,43 @@ export const TextScannerModal: React.FC<TextScannerModalProps> = ({
                           </div>
                         </div>
                       )}
+
+                      {/* Serial / Mã Máy Input Row */}
+                      <div className="flex items-center gap-2">
+                        <div className="w-24 text-[11px] font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1 shrink-0">
+                          <Barcode className="w-3.5 h-3.5 text-cyan-600 dark:text-cyan-400" />
+                          <span>Serial/Mã:</span>
+                        </div>
+                        <div className="flex-1 relative">
+                          <input
+                            type="text"
+                            placeholder="Mã Serial trong ngoặc (VD: CDQF44NTDH)..."
+                            value={pairSerial}
+                            onChange={(e) => setPairSerial(e.target.value)}
+                            className="w-full px-3 py-1.5 bg-white dark:bg-slate-900 border border-cyan-300 dark:border-cyan-700/80 rounded-xl text-xs font-mono font-bold text-slate-900 dark:text-slate-100 outline-none focus:ring-2 focus:ring-cyan-500"
+                          />
+                        </div>
+                        {pairSerial && (
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => setPairImei1(pairSerial)}
+                              className="px-2 py-1 bg-cyan-100 hover:bg-cyan-200 dark:bg-cyan-950/80 dark:hover:bg-cyan-900 text-cyan-800 dark:text-cyan-200 text-[10px] font-bold rounded-lg shrink-0 cursor-pointer"
+                              title="Dùng Serial làm mã IMEI/Thiết bị"
+                            >
+                              Gán sang IMEI
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleCopy(pairSerial)}
+                              className="p-1.5 text-slate-500 hover:text-cyan-600 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 shrink-0 cursor-pointer"
+                              title="Sao chép Serial"
+                            >
+                              <Copy className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </div>
 
                     {/* Primary Pair Action Button */}
@@ -1321,7 +1822,7 @@ export const TextScannerModal: React.FC<TextScannerModalProps> = ({
                       <button
                         type="button"
                         onClick={handleApplyModelAndImeiPair}
-                        disabled={!pairModelName && !pairImei1}
+                        disabled={!pairModelName && !pairImei1 && !pairSerial}
                         className="flex-1 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 disabled:opacity-50 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-md shadow-blue-500/25 cursor-pointer active:scale-98 transition-all"
                       >
                         <CheckCircle2 className="w-4 h-4" />
@@ -1335,7 +1836,7 @@ export const TextScannerModal: React.FC<TextScannerModalProps> = ({
                         <button
                           type="button"
                           onClick={handleCreateNewRowWithPair}
-                          disabled={!pairModelName && !pairImei1}
+                          disabled={!pairModelName && !pairImei1 && !pairSerial}
                           className="px-3.5 py-2.5 bg-white dark:bg-slate-800 border border-blue-300 dark:border-blue-700 hover:bg-blue-50 text-blue-700 dark:text-blue-300 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 cursor-pointer transition-colors shrink-0"
                           title="Tạo thêm 1 dòng mới vào bảng với Tên & IMEI vừa quét"
                         >

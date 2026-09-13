@@ -33,7 +33,7 @@ export interface ExtractedOCRData {
   detectedProducts?: DeviceProductItem[];
   allImeis: string[];
   allModels: string[];
-  method: 'gemini' | 'local_tesseract' | 'barcode';
+  method: 'gemini' | 'local_tesseract' | 'barcode' | 'tesseract-vie' | 'tesseract-vie-eng';
 }
 
 // Clean string helper
@@ -44,15 +44,223 @@ function cleanText(text: string): string {
     .trim();
 }
 
+/**
+ * Tự động phục hồi và chuẩn hóa dấu tiếng Việt cho các từ chuyên ngành điện thoại,
+ * bảng kê, phiếu xuất kho và tem sản phẩm bị OCR nhận diện thiếu hoặc sai dấu
+ * (Ví dụ: "TÌM" -> "TÍM", "CU" -> "CŨ", "TRAY XƯỚC" -> "TRẦY XƯỚC", "DEN" -> "ĐEN", v.v.)
+ */
+export function restoreVietnameseDiacritics(text: string): string {
+  if (!text) return '';
+  let res = text;
+
+  // 1. Phục hồi cụm từ tình trạng máy (Condition phrases) - đặc biệt xử lý lỗi Tesseract tách chữ như "TRAY XU OC"
+  // Bắt các biến thể: "TRAY XU OC", "TRẦY XU OC", "TRAY XƯ OC", "TRAY XU ỚC", "TRAY XUOC", "TRAY XƯỚC"
+  res = res.replace(/\b(?:CU|CỦ|CŨ)\s*([\-–—])\s*(?:TRAY|TRÂY|TRÁY|TRẦY)\s*(?:XƯỚC|XUOC|XƯƠC|XUỚC|XU\s*OC|XƯ\s*OC|XU\s*ỚC|XƯ\s*ỚC)\b/gi, 'CŨ $1 TRẦY XƯỚC');
+  res = res.replace(/\b(?:TRAY|TRÂY|TRÁY|TRẦY)\s*(?:XƯỚC|XUOC|XƯƠC|XUỚC|XU\s*OC|XƯ\s*OC|XU\s*ỚC|XƯ\s*ỚC)\b/gi, 'TRẦY XƯỚC');
+  res = res.replace(/\bTRẦY\s*(?:XUOC|XƯƠC|XUỚC|XU\s*OC|XƯ\s*OC|XU\s*ỚC)\b/gi, 'TRẦY XƯỚC');
+  res = res.replace(/\b(?:XU\s*OC|XƯ\s*OC|XU\s*ỚC|XƯ\s*ỚC|XUOC|XƯƠC|XUỚC)\b/gi, 'XƯỚC');
+  res = res.replace(/\b(?:TRAY|TRÂY|TRÁY)\b/gi, 'TRẦY');
+
+  res = res.replace(/\b(?:CU|CỦ|CŨ)\s*([\-–—])\s*(?:DEP|ĐEP|ĐẸP)\b/gi, 'CŨ $1 ĐẸP');
+  res = res.replace(/\b(?:CU|CỦ|CŨ)\s*([\-–—])\s*(?:PHAY|PHẨY)\b/gi, 'CŨ $1 PHẨY');
+  res = res.replace(/\b(?:CU|CỦ|CŨ)\s*([\-–—])\s*(?:KINH|KÍNH)\b/gi, 'CŨ $1 KÍNH');
+  res = res.replace(/\b(?:CU|CỦ|CŨ)\s*([\-–—])\s*(?:CAN|CẤN)\s*(?:MOP|MÓP)\b/gi, 'CŨ $1 CẤN MÓP');
+  res = res.replace(/\b(?:CAN|CẤN)\s*(?:MOP|MÓP)\b/gi, 'CẤN MÓP');
+  res = res.replace(/\b(?:PHAY|PHẨY)\s*(?:KINH|KÍNH)\b/gi, 'PHẨY KÍNH');
+  res = res.replace(/\b(?:TRẦY|TRAY)\s*(?:KINH|KÍNH)\b/gi, 'TRẦY KÍNH');
+  res = res.replace(/\b(?:CU|CỦ|CŨ)\s*([\-–—])\s*(?:XAU|XẤU)\b/gi, 'CŨ $1 XẤU');
+  res = res.replace(/\b(?:CU|CỦ)\s*([\-–—])\s*XƯỚC\b/gi, 'CŨ $1 XƯỚC');
+
+  // Chữ CŨ đứng trước gạch nối hoặc sau cấu hình/màu sắc máy
+  res = res.replace(/\b(?:CU|CỦ)\s*([\-–—])/gi, 'CŨ $1');
+  res = res.replace(/([\-–—])\s*(?:CU|CỦ)\b/gi, '$1 CŨ');
+  res = res.replace(/\b(PRO|MAX|PLUS|MINI|GB|TB|TÍM|ĐEN|TRẮNG|VÀNG|XANH|HỒNG|BẠC|XÁM)\s+(?:CU|CỦ)\b/gi, '$1 CŨ');
+  res = res.replace(/\b(?:MAY|HANG)\s+(?:CU|CỦ)\b/gi, '$1 CŨ');
+  res = res.replace(/\b(?:CU|CỦ)\s+(?:TRẦY|MỚI|ĐẸP|PHẨY|KÍNH|CẤN|MÓP|XẤU|99%)\b/gi, 'CŨ $1');
+
+  // Tình trạng Mới, Like New, Chính Hãng, Việt Nam
+  res = res.replace(/\bMOI\s*100%/gi, 'MỚI 100%');
+  res = res.replace(/\b(?:MAY|HANG)\s+MOI\b/gi, '$1 MỚI');
+  res = res.replace(/\bCHINH\s+HANG\b/gi, 'CHÍNH HÃNG');
+  res = res.replace(/\bCHÍNH\s+HANG\b/gi, 'CHÍNH HÃNG');
+  res = res.replace(/\bCHINH\s+HÃNG\b/gi, 'CHÍNH HÃNG');
+  res = res.replace(/\bVIET\s+NAM\b/gi, 'VIỆT NAM');
+  res = res.replace(/\bVIỆT\s+NAM\b/gi, 'VIỆT NAM');
+
+  // 2. Phục hồi Màu Sắc (Colors)
+  // Tesseract thường nhận diện "TÍM" thành "TÌM" hoặc "TIM"
+  res = res.replace(/\b(?:TÌM|TIM)\b/gi, 'TÍM');
+  res = res.replace(/\bTRANG\b/gi, 'TRẮNG');
+  res = res.replace(/\bDEN\b/gi, 'ĐEN');
+  res = res.replace(/\bVANG\b/gi, 'VÀNG');
+  res = res.replace(/\bHONG\b/gi, 'HỒNG');
+  res = res.replace(/\bBAC\b/gi, 'BẠC');
+  res = res.replace(/\bXAM\b/gi, 'XÁM');
+  res = res.replace(/\bXANH\s+DUONG\b/gi, 'XANH DƯƠNG');
+  res = res.replace(/\bXANH\s+LA\b/gi, 'XANH LÁ');
+  res = res.replace(/\bXANH\s+LUC\b/gi, 'XANH LỤC');
+  res = res.replace(/\bXANH\s+DEN\b/gi, 'XANH ĐEN');
+  res = res.replace(/\bXANH\s+NGOC\b/gi, 'XANH NGỌC');
+
+  // 3. Phục hồi Thuật Ngữ Bảng Kê / Phiếu Kho / Tiêu Đề
+  res = res.replace(/\bTEN\s+VAT\s+TU\b/gi, 'TÊN VẬT TƯ');
+  res = res.replace(/\bVAT\s+TU\b/gi, 'VẬT TƯ');
+  res = res.replace(/\bTEN\s+HANG\b/gi, 'TÊN HÀNG');
+  res = res.replace(/\bHANG\s+HOA\b/gi, 'HÀNG HÓA');
+  res = res.replace(/\bBANG\s+KE\s+CHI\s+TIET\b/gi, 'BẢNG KÊ CHI TIẾT');
+  res = res.replace(/\bBANG\s+KE\s+HANG\s+HOA\b/gi, 'BẢNG KÊ HÀNG HÓA');
+  res = res.replace(/\bBANG\s+KE\b/gi, 'BẢNG KÊ');
+  res = res.replace(/\bCHI\s+TIET\b/gi, 'CHI TIẾT');
+  res = res.replace(/\bPHIEU\s+XUAT\s+KHO\b/gi, 'PHIẾU XUẤT KHO');
+  res = res.replace(/\bPHIEU\s+DIEU\s+CHUYEN\b/gi, 'PHIẾU ĐIỀU CHUYỂN');
+  res = res.replace(/\bPHIEU\s+NHAP\s+KHO\b/gi, 'PHIẾU NHẬP KHO');
+  res = res.replace(/\bPHIEU\s+KIEM\s+KE\b/gi, 'PHIẾU KIỂM KÊ');
+  res = res.replace(/\bHOA\s+DON\b/gi, 'HÓA ĐƠN');
+  res = res.replace(/\bBO\s+NHO\b/gi, 'BỘ NHỚ');
+  res = res.replace(/\bDUNG\s+LUONG\b/gi, 'DUNG LƯỢNG');
+  res = res.replace(/\bMA\s+SO\b/gi, 'MÃ SỐ');
+  res = res.replace(/\bDON\s+VI\s+TINH\b/gi, 'ĐƠN VỊ TÍNH');
+  res = res.replace(/\bSO\s+LUONG\b/gi, 'SỐ LƯỢNG');
+  res = res.replace(/\bTINH\s+TRANG\b/gi, 'TÌNH TRẠNG');
+  res = res.replace(/\bDIEN\s+THOAI\b/gi, 'ĐIỆN THOẠI');
+  res = res.replace(/\bXUAT\s+XU\b/gi, 'XUẤT XỨ');
+  res = res.replace(/\bNGAY\s+NHAP\b/gi, 'NGÀY NHẬP');
+  res = res.replace(/\bNGAY\s+XUAT\b/gi, 'NGÀY XUẤT');
+  res = res.replace(/\bBAO\s+HANH\b/gi, 'BẢO HÀNH');
+  res = res.replace(/\bTHU\s+KHO\b/gi, 'THỦ KHO');
+  res = res.replace(/\bNGUOI\s+LAP\b/gi, 'NGƯỜI LẬP');
+  res = res.replace(/\bQUAN\s+LY\b/gi, 'QUẢN LÝ');
+  res = res.replace(/\bTONG\s+CONG\b/gi, 'TỔNG CỘNG');
+  res = res.replace(/\bDON\s+GIA\b/gi, 'ĐƠN GIÁ');
+  res = res.replace(/\bTHANH\s+TIEN\b/gi, 'THÀNH TIỀN');
+  res = res.replace(/\bXAC\s+NHAN\b/gi, 'XÁC NHẬN');
+  res = res.replace(/\bGIAO\s+NHAN\b/gi, 'GIAO NHẬN');
+  res = res.replace(/\bKHACH\s+HANG\b/gi, 'KHÁCH HÀNG');
+
+  return res;
+}
+
+// Preprocess image for OCR: scale up small cropped rows and enhance contrast for diacritic sharpness
+export function preprocessImageForOCR(imageDataUrl: string): Promise<string> {
+  return new Promise((resolve) => {
+    if (typeof window === 'undefined') {
+      resolve(imageDataUrl);
+      return;
+    }
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        const width = img.naturalWidth || img.width;
+        const height = img.naturalHeight || img.height;
+
+        let scale = 1;
+        if (height < 250) {
+          scale = Math.min(2.5, 350 / height);
+        } else if (height > 2500 || width > 2500) {
+          scale = Math.min(2500 / width, 2500 / height);
+        }
+
+        canvas.width = Math.round(width * scale);
+        canvas.height = Math.round(height * scale);
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(imageDataUrl);
+          return;
+        }
+
+        // Apply contrast & sharpness enhancement
+        ctx.filter = 'contrast(135%) brightness(102%)';
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL('image/jpeg', 0.95));
+      } catch {
+        resolve(imageDataUrl);
+      }
+    };
+    img.onerror = () => resolve(imageDataUrl);
+    img.src = imageDataUrl;
+  });
+}
+
+// Detect invoice noise lines (headers, addresses, tax codes, table footers)
+export function isInvoiceNoise(text: string): boolean {
+  const t = text.trim();
+  if (!t || t.length < 2) return true;
+  if (/^(?:CÔNG TY|CHI NHÁNH|DOANH NGHIỆP|TNHH|CỔ PHẦN)/i.test(t)) return true;
+  if (/^(?:Số\s*\d+|Đường|Phường|Quận|Huyện|Thành phố|Việt Nam|Địa chỉ)/i.test(t)) return true;
+  if (/^(?:MST|Mã số thuế|Tax ID|DC\.HN|HĐ KVCNB|Số HĐ|Điện thoại|Hotline)/i.test(t)) return true;
+  if (/^(?:BẢNG KÊ CHI TIẾT|BẢNG KÊ HÀNG HÓA|PHIẾU XUẤT KHO|PHIẾU ĐIỀU CHUYỂN|PHIẾU NHẬP KHO|PHIẾU KIỂM KÊ|HÓA ĐƠN)/i.test(t)) return true;
+  if (/^(?:Từ kho|Đến kho|Lý do điều chuyển|Người lập phiếu|Tổng số lượng|Cộng\s*\d*|Thủ kho|Quản lý cửa hàng|Nhân viên giao nhận|Ký,\s*họ tên)/i.test(t)) return true;
+  if (/^(?:STT\s+Tên\s+vật\s+tư|STT\s+Tên\s+hàng|ĐVT\s+SL|Mã số\s+ĐVT|Số lượng|Đơn vị tính)/i.test(t)) return true;
+  return false;
+}
+
+// Clean and extract product details from an invoice table row (e.g. "1 APPLE IPHONE 14 PRO 256GB TÍM CŨ - TRẦY XƯỚC APP-IP14-PRO- Cái 1")
+export function cleanInvoiceProductRow(rawLine: string, nextLine: string = '') {
+  // Normalize & restore Vietnamese diacritics first
+  const fixedRaw = restoreVietnameseDiacritics(rawLine);
+  const fixedNext = restoreVietnameseDiacritics(nextLine);
+
+  // 1. Check for serial in parentheses in rawLine or nextLine
+  let serial = '';
+  const pM1 = fixedRaw.match(/[([{\uff08]\s*([A-Z0-9]{7,20})\s*[)}\]\uff09]/i);
+  if (pM1) {
+    serial = pM1[1].trim();
+  } else if (fixedNext) {
+    const pM2 = fixedNext.match(/[([{\uff08]\s*([A-Z0-9]{7,20})\s*[)}\]\uff09]/i);
+    if (pM2) serial = pM2[1].trim();
+  }
+
+  // 2. Clean device name: remove row number (STT), column names, trailing table cell data
+  let name = fixedRaw
+    .replace(/^[\d\s|.*#\-–—]+\s*(?:Tên\s*vật\s*tư|Tên\s*hàng|Tên\s*SP)?[:\s\-–—]*/i, '')
+    .replace(/[([{\uff08]\s*[A-Z0-9]{7,20}\s*[)}\]\uff09]/gi, '')
+    .trim();
+
+  // Strip table column artifacts:
+  // e.g. 'APP-IP14-PRO- Cái 1' or 'Cái 1'
+  name = name.replace(/\s+[A-Z0-9_\-]+(?:\-[A-Z0-9_\-]+)*\s+(?:Cái|Chiếc|Bộ|Hộp|Cây|Kg|Chiếc)\s+\d+.*$/i, '');
+  name = name.replace(/\s+(?:Cái|Chiếc|Bộ|Hộp|Cây|Kg)\s+\d+.*$/i, '');
+  name = name.replace(/\s+[A-Z]{2,}\-[A-Z0-9\-]+\s*$/i, '');
+  name = restoreVietnameseDiacritics(name.trim());
+
+  // 3. Storage
+  const stM = name.match(/\b(\d{1,2}GB\s*[\/|+]\s*\d{2,4}GB|\d{2,4}GB|\d{1,2}TB)\b/i);
+  const storage = stM ? stM[0].toUpperCase().replace(/\s+/g, '') : '';
+
+  // 4. Color
+  const colM = name.match(/\b(Tím|Tim|Vàng|Vang|Xanh|Xanh\s*dương|Xanh\s*lá|Xanh\s*lục|Đen|Den|Trắng|Trang|Hồng|Hong|Bạc|Bac|Xám|Xam|Gold|Silver|Space\s*Gray|Titan|Titanium|Black|White|Blue|Green|Purple|Red|Yellow)\b/i);
+  const color = colM ? restoreVietnameseDiacritics(colM[0].toUpperCase()) : '';
+
+  // 5. Condition (e.g. CŨ - TRẦY XƯỚC, CŨ - ĐẸP, 99%, MỚI 100%)
+  const condM = name.match(/\b(Cũ\s*[\-–—]\s*(?:Trầy\s*xước|Đẹp|Phẩy|Kính|Xấu|Cấn|Móp)|Mới\s*100%|\d{2}%)\b/i);
+  const condition = condM ? restoreVietnameseDiacritics(condM[0].toUpperCase()) : '';
+
+  // 6. SKU code
+  let sku = '';
+  const combined = fixedRaw + ' ' + fixedNext;
+  const skuWrap = combined.match(/\b([A-Z]{2,}\-[A-Z0-9\-]+)[\s\-]+(?:\([A-Z0-9]+\)\s+)?([A-Z0-9]{2,}\-[A-Z0-9\-]+)\b/i);
+  if (skuWrap) {
+    sku = skuWrap[1].replace(/\-$/, '') + '-' + skuWrap[2].replace(/^\-/, '');
+  } else {
+    const singleSku = combined.match(/\b([A-Z]{2,}\-[A-Z0-9\-]{4,30})\b/i);
+    if (singleSku) sku = singleSku[1];
+  }
+
+  return { name, serial, storage, color, condition, sku };
+}
+
 // Helper to extract common phone & retail fields from text using regex & heuristics
 export function parsePhoneAndLabelFields(
   rawText: string,
   targetField?: string,
   availableColumns: string[] = []
 ): ExtractedOCRData {
-  const lines = rawText
+  const normalizedRaw = restoreVietnameseDiacritics(rawText);
+  const lines = normalizedRaw
     .split(/[\r\n]+/)
-    .map((l) => l.trim())
+    .map((l) => restoreVietnameseDiacritics(l.trim()))
     .filter((l) => l.length > 0);
 
   const detectedFields: Record<string, string> = {};
@@ -325,45 +533,31 @@ export function parsePhoneAndLabelFields(
 
   for (let i = 0; i < lines.length; i++) {
     const rawLine = lines[i];
-    // Check if line contains a device model
+    const nextLine = i + 1 < lines.length ? lines[i + 1] : '';
+
+    // Check if line contains a device model or product table row
     if (
       /(?:APPLE\s+)?(?:iPhone\s+(?:16|15|14|13|12|11|XS|XR|X|SE|8|7)|iPad|Apple\s+Watch|Samsung\s+Galaxy|Galaxy\s+[SZNAM]\d|Nubia|Red\s*Magic|POCO|Xiaomi|Redmi|Oppo|Realme|Vivo|Pixel|Sony\s+Xperia)/i.test(
         rawLine
       )
     ) {
-      // 1. Clean product name
-      let cleanModel = rawLine
-        .replace(/^[\d\s|.*#\-–—]+\s*(?:Tên\s*vật\s*tư|Tên\s*hàng|Tên\s*SP)?[:\s\-–—]*/i, '') // strip leading STT e.g. "1 " or "2 "
-        .replace(/\s*[([{\uff08][A-Z0-9]{7,20}[)}\]\uff09]\s*$/i, '') // strip inline trailing (SERIAL)
-        .trim();
+      // Use cleanInvoiceProductRow to accurately parse device name and strip table artifacts
+      const parsedRow = cleanInvoiceProductRow(rawLine, nextLine);
+      const cleanModel = parsedRow.name;
+      let serialOrImei = parsedRow.serial;
 
-      // 2. Check for inline or adjacent Serial/IMEI
-      let serialOrImei = '';
-      const inlineParenMatch = rawLine.match(/[([{\uff08]\s*([A-Z0-9]{7,20})\s*[)}\]\uff09]/i);
-      if (inlineParenMatch && inlineParenMatch[1]) {
-        serialOrImei = cleanText(inlineParenMatch[1]);
-      } else if (i + 1 < lines.length) {
-        const nextLine = lines[i + 1];
+      if (!serialOrImei && nextLine) {
         const nextParenMatch = nextLine.match(/^[([{\uff08]\s*([A-Z0-9]{7,20})\s*[)}\]\uff09]/i);
         if (nextParenMatch && nextParenMatch[1]) {
           serialOrImei = cleanText(nextParenMatch[1]);
-          i++; // skip next line as it was consumed as serial for this product
+          i++; // skip next line as it was consumed
         }
       }
 
-      // 3. Extract storage
-      let storage = '';
-      const stM = cleanModel.match(/\b(16|32|64|128|256|512)\s*(?:GB|G)\b/i) || cleanModel.match(/\b(1|2)\s*TB\b/i);
-      if (stM) {
-        storage = stM[0].toUpperCase().replace(/\s+/, '');
-      }
-
-      // 4. Extract color
-      let color = '';
-      const colM = cleanModel.match(/\b(Vàng|Vang|Xanh|Xanh\s*dương|Xanh\s*lá|Xanh\s*lục|Đen|Den|Trắng|Trang|Tím|Tim|Hồng|Hong|Bạc|Bac|Xám|Xam|Gold|Silver|Space\s*Gray|Titan|Titanium|Black|White|Blue|Green|Purple|Red|Yellow)\b/i);
-      if (colM) {
-        color = colM[1].toUpperCase();
-      }
+      const storage = parsedRow.storage;
+      const color = parsedRow.color;
+      const condition = parsedRow.condition;
+      const sku = parsedRow.sku;
 
       if (cleanModel.length >= 5) {
         detectedProducts.push({
@@ -375,16 +569,37 @@ export function parsePhoneAndLabelFields(
           color: color || undefined,
           rawText: rawLine,
         });
+
+        // Set primary fields if first product
+        if (detectedProducts.length === 1) {
+          detectedFields['Model'] = cleanModel;
+          detectedFields['Ten_SP'] = cleanModel;
+          detectedFields['Tên vật tư'] = cleanModel;
+          if (serialOrImei) {
+            detectedFields['Serial'] = serialOrImei;
+            detectedFields['IMEI'] = serialOrImei;
+            detectedFields['IMEI 1'] = serialOrImei;
+            detectedFields['IMEI / Serial'] = serialOrImei;
+          }
+          if (storage) detectedFields['DungLuong'] = storage;
+          if (color) detectedFields['MauSac'] = color;
+          if (condition) detectedFields['TinhTrang'] = condition;
+          if (sku) {
+            detectedFields['MaSo'] = sku;
+            detectedFields['Mã số'] = sku;
+          }
+        }
       }
     }
   }
 
   // ==========================================
-  // 8. ADD SHORT RELEVANT LINES TO SUGGESTIONS
+  // 8. ADD RELEVANT LINES TO SUGGESTIONS (FILTERING INVOICE NOISE)
   // ==========================================
   lines.forEach((line) => {
     const clean = cleanText(line);
-    if (clean.length >= 3 && clean.length <= 40 && !suggestedSet.has(clean)) {
+    // Ignore warehouse / company / table footer noise lines
+    if (!isInvoiceNoise(clean) && clean.length >= 3 && clean.length <= 60 && !suggestedSet.has(clean)) {
       suggestedSet.add(clean);
     }
   });
@@ -396,7 +611,7 @@ export function parsePhoneAndLabelFields(
     if ((lower.includes('imei') || lower.includes('mã')) && detectedFields['IMEI']) {
       extractedTarget = detectedFields['IMEI'];
     } else if (
-      (lower.includes('model') || lower.includes('ten') || lower.includes('máy') || lower.includes('hàng') || lower.includes('san_pham')) &&
+      (lower.includes('model') || lower.includes('ten') || lower.includes('máy') || lower.includes('hàng') || lower.includes('san_pham') || lower.includes('vật tư')) &&
       detectedFields['Model']
     ) {
       extractedTarget = detectedFields['Model'];
@@ -482,38 +697,54 @@ export function scanQrBarcodeFromImageData(imageDataUrl: string): Promise<string
   });
 }
 
-// Local Tesseract OCR processing with progress callback
+// Local Tesseract OCR processing with progress callback & language selection
 export async function performLocalTesseractOCR(
   imageDataUrl: string,
   targetField?: string,
   availableColumns: string[] = [],
-  onProgress?: (progress: number, statusText: string) => void
+  onProgress?: (progress: number, statusText: string) => void,
+  ocrLanguage: string = 'vie'
 ): Promise<ExtractedOCRData> {
   // 1. Scan for QR / Barcode in image
   const qrBarcode = await scanQrBarcodeFromImageData(imageDataUrl);
 
-  onProgress?.(0.15, 'Khởi động bộ nhận diện OCR tiếng Việt & tiếng Anh...');
+  onProgress?.(0.12, 'Chuẩn hóa độ sắc nét ảnh & dấu tiếng Việt...');
+  const optimizedImageUrl = await preprocessImageForOCR(imageDataUrl);
+
+  const langLabel = ocrLanguage === 'vie' ? 'Bộ nhận diện tiếng Việt chuyên sâu (VIE)' : 'Bộ nhận diện tiếng Việt & Anh (VIE+ENG)';
+  onProgress?.(0.2, `Khởi động ${langLabel}...`);
 
   let worker: any = null;
   try {
-    worker = await createWorker('vie+eng', 1, {
+    worker = await createWorker(ocrLanguage, 1, {
       logger: (m: any) => {
         if (m.status === 'recognizing text') {
           const p = 0.2 + (m.progress || 0) * 0.75;
-          onProgress?.(Math.min(0.95, p), `Đang quét văn bản tem máy (${Math.round((m.progress || 0) * 100)}%)...`);
+          const statusMsg = ocrLanguage === 'vie' 
+            ? `Đang nhận diện tiếng Việt có dấu (${Math.round((m.progress || 0) * 100)}%)...`
+            : `Đang quét văn bản (${Math.round((m.progress || 0) * 100)}%)...`;
+          onProgress?.(Math.min(0.95, p), statusMsg);
         }
       },
     });
 
-    const ret = await worker.recognize(imageDataUrl);
-    const recognizedText = ret?.data?.text || '';
+    try {
+      await worker.setParameters({
+        preserve_interword_spaces: '1',
+      });
+    } catch {}
+
+    const ret = await worker.recognize(optimizedImageUrl);
+    const rawRecognizedText = ret?.data?.text || '';
+    const recognizedText = restoreVietnameseDiacritics(rawRecognizedText);
 
     await worker.terminate();
     worker = null;
 
-    onProgress?.(1.0, 'Đã nhận diện xong!');
+    onProgress?.(1.0, 'Đã nhận diện xong văn bản tiếng Việt!');
 
     const parsed = parsePhoneAndLabelFields(recognizedText, targetField, availableColumns);
+    parsed.method = ocrLanguage === 'vie' ? 'tesseract-vie' : 'tesseract-vie-eng';
 
     // If QR / Barcode is present
     if (qrBarcode) {

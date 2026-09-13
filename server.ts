@@ -77,31 +77,35 @@ async function startServer() {
         });
       }
 
-      const systemPrompt = `You are a high-precision OCR and barcode/product text scanner AI specialized in electronics, smartphones (iPhone, Samsung, Xiaomi, Nubia, Oppo, Vivo, Realme, iPad, etc.), retail product boxes, shipping labels, and store/warehouse inventory invoices.
-Your task is to analyze the provided image, read all visible text accurately (Vietnamese, English, serial numbers, barcodes, numbers), and extract key structured fields.
+      const systemPrompt = `You are an ultra-high precision OCR AI specialized in electronics, smartphones (iPhone, Samsung, Xiaomi, Nubia, Oppo, Vivo, Realme, iPad, etc.), retail product boxes, and store/warehouse inventory invoices (BẢNG KÊ CHI TIẾT HÀNG HÓA / PHIẾU XUẤT KHO / PHIẾU ĐIỀU CHUYỂN).
 
-Instructions:
-1. Extract ALL visible text clearly line-by-line in "lines" and full text in "fullText".
-2. MULTI-PRODUCT DETECTION (Phiếu xuất kho / kiểm kê / danh sách có nhiều sản phẩm):
-   - If the image contains multiple product lines / rows (e.g. STT 1, STT 2, or multiple device models with their respective serials/IMEIs in parentheses), extract ALL of them into the "detectedProducts" array.
-   - For each product in "detectedProducts":
-     * "modelName": full device description without parentheses serial (e.g. "APPLE IPHONE 14 PRO MAX 256GB VÀNG CŨ - ĐẸP", "APPLE IPHONE 12 128GB XANH CŨ - ĐẸP").
-     * "imei1": clean serial/IMEI inside parentheses (e.g. "JLJ63Y27D5", "FFML807V0F12", or 15-digit IMEI, stripping brackets/parentheses).
-     * "serial": serial number (e.g. "JLJ63Y27D5").
-     * "storage": storage if present (e.g. "256GB", "128GB").
-     * "color": color if present (e.g. "VÀNG", "XANH", "ĐEN").
-     * "price": price if present.
-3. For single-field compatibility:
-   - "detectedFields" should hold the first detected item's properties (IMEI, Model, Serial, DungLuong, MauSac, Gia).
-   - If "targetField" is specified: provide the best matching value for the target in "extractedTarget".
-4. "suggestedItems": include all clean IMEIs, Serials, Model names, Capacities, and individual clear lines so the user can easily tap to pick any value.`;
+CRITICAL DIRECTIVE - INVENTORY & TRANSFER SHEETS:
+When the image is an inventory / transfer sheet or if the user highlights/circles a specific table cell:
+1. FOCUS ON THE PRODUCT CELL ("Tên vật tư"):
+   - Extract the full clean device name (e.g. "APPLE IPHONE 14 PRO 256GB TÍM CŨ - TRẦY XƯỚC").
+   - Strip out table column artifacts (do NOT include SKU codes like "APP-IP14-PRO-", units like "Cái", or quantities like "1" in the model name).
+2. IMEI / SERIAL:
+   - Extract the exact alphanumeric code inside the parentheses (e.g. "(CDQF44NTDH)" -> "CDQF44NTDH", or 15-digit IMEI). Ensure 100% character accuracy.
+3. IGNORE ALL PERIPHERAL NOISE:
+   - Completely ignore company headers ("CÔNG TY...", "CHI NHÁNH..."), addresses, tax IDs ("MST:..."), voucher numbers ("DC.HN...", "HĐ KVCNB"), warehouse names ("Từ kho:", "Đến kho:"), transfer reasons, signatures, and QR codes.
+4. Extract structured attributes:
+   - "storage": capacity (e.g. "256GB")
+   - "color": color name (e.g. "TÍM", "VÀNG", "ĐEN")
+   - "condition": condition if stated (e.g. "CŨ - TRẦY XƯỚC", "CŨ - ĐẸP", "99%")
+   - "sku": product code if present (e.g. "APP-IP14-PRO-256G-TI-95")
+5. VIETNAMESE ACCENT & DIACRITIC ACCURACY:
+   - Always retain and accurately output full Vietnamese accents and diacritics (e.g., "TÍM CŨ - TRẦY XƯỚC", "VÀNG", "ĐEN", "TRẮNG", "HỒNG", "XÁM", "CŨ - ĐẸP", never miss accents like "TIM CU - TRAY XUOC" or misclassify "TÍM" as "TÌM").
+
+For single-field matching:
+- If targetField is 'Model' or 'Ten_SP': provide the clean device name.
+- If targetField is 'IMEI' or 'Serial': provide the exact serial/IMEI inside parentheses.`;
 
       const userPrompt = `Target Field requested by user: "${targetField || 'any'}".
-Available dataset columns: ${Array.isArray(availableFields) ? availableFields.join(', ') : 'IMEI, Model, Serial, Gia, DungLuong, MauSac'}.
-Please extract all products and structured text from this image.`;
+Available dataset columns: ${Array.isArray(availableFields) ? availableFields.join(', ') : 'IMEI, Model, Serial, Gia, DungLuong, MauSac, TinhTrang'}.
+Please extract all products and structured text from this image with 100% precision on the product name and serial/IMEI.`;
 
       const response = await ai.models.generateContent({
-        model: 'gemini-3.7-flash',
+        model: 'gemini-3.8-flash',
         contents: {
           parts: [
             {
