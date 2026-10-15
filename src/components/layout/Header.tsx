@@ -76,8 +76,8 @@ export const Header: React.FC<HeaderProps> = ({
     >
       {/* Brand & Active Template Info */}
       <div className="flex items-center gap-2 sm:gap-2.5 min-w-0 flex-1 sm:flex-initial">
-        <div className="flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/20 shrink-0">
-          <QrCode className="w-4 h-4 sm:w-6 sm:h-6" />
+        <div className="relative w-8 h-8 sm:w-10 sm:h-10 rounded-xl overflow-hidden shadow-md shadow-blue-500/25 shrink-0 border border-slate-200/60 dark:border-slate-700/80">
+          <img src="/icon.svg" alt="QR Label Pro Logo" className="w-full h-full object-cover" />
         </div>
         <div className="min-w-0 flex-1 sm:flex-initial">
           {/* Template Title */}

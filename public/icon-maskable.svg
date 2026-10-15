@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="mBgGrad" x1="0" y1="0" x2="512" y2="512" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#3b82f6"/>
+      <stop offset="45%" stop-color="#4f46e5"/>
+      <stop offset="100%" stop-color="#1e1b4b"/>
+    </linearGradient>
+
+    <linearGradient id="mAccentGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="100%" stop-color="#10b981"/>
+    </linearGradient>
+
+    <linearGradient id="mCardGrad" x1="120" y1="110" x2="392" y2="402" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#f8fafc"/>
+    </linearGradient>
+
+    <filter id="mShadow" x="0" y="8" width="512" height="512" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#0f172a" flood-opacity="0.4"/>
+    </filter>
+  </defs>
+
+  <!-- Full-bleed background for maskable (safe for circle, squircle, pebble) -->
+  <rect width="512" height="512" fill="url(#mBgGrad)"/>
+
+  <!-- Centered safe zone content (within 80% circle, bounds 60 to 452) -->
+  <g filter="url(#mShadow)">
+    <rect x="116" y="116" width="280" height="280" rx="36" fill="url(#mCardGrad)"/>
+    <rect x="116" y="116" width="280" height="280" rx="36" stroke="#ffffff" stroke-width="3" stroke-opacity="0.9"/>
+  </g>
+
+  <!-- Header strip -->
+  <path d="M 116 150 C 116 131.2 131.2 116 150 116 L 362 116 C 380.8 116 396 131.2 396 150 L 396 160 L 116 160 Z" fill="#2563eb"/>
+  <text x="356" y="146" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="16" font-weight="900" fill="#ffffff" text-anchor="end" letter-spacing="1.5">LABEL PRO</text>
+
+  <!-- QR Elements in safe area -->
+  <g fill="#0f172a">
+    <!-- Top-Left Finder -->
+    <rect x="146" y="184" width="70" height="70" rx="15" fill="#0f172a"/>
+    <rect x="158" y="196" width="46" height="46" rx="8" fill="#ffffff"/>
+    <rect x="168" y="206" width="26" height="26" rx="5" fill="url(#mAccentGrad)"/>
+
+    <!-- Top-Right Finder -->
+    <rect x="296" y="184" width="70" height="70" rx="15" fill="#0f172a"/>
+    <rect x="308" y="196" width="46" height="46" rx="8" fill="#ffffff"/>
+    <rect x="318" y="206" width="26" height="26" rx="5" fill="#2563eb"/>
+
+    <!-- Bottom-Left Finder -->
+    <rect x="146" y="296" width="70" height="70" rx="15" fill="#0f172a"/>
+    <rect x="158" y="308" width="46" height="46" rx="8" fill="#ffffff"/>
+    <rect x="168" y="318" width="26" height="26" rx="5" fill="#4f46e5"/>
+
+    <!-- Middle Dots -->
+    <rect x="238" y="184" width="18" height="18" rx="4" fill="#0f172a"/>
+    <rect x="238" y="210" width="18" height="18" rx="4" fill="#2563eb"/>
+    <rect x="238" y="236" width="18" height="18" rx="4" fill="#0f172a"/>
+
+    <!-- Center Module -->
+    <rect x="234" y="268" width="34" height="34" rx="8" fill="url(#mAccentGrad)"/>
+    <circle cx="251" cy="285" r="6" fill="#ffffff"/>
+
+    <!-- Bottom Right modules -->
+    <rect x="286" y="268" width="18" height="18" rx="4" fill="#0f172a"/>
+    <rect x="316" y="268" width="18" height="18" rx="4" fill="#0f172a"/>
+    <rect x="346" y="268" width="20" height="18" rx="4" fill="#2563eb"/>
+
+    <rect x="286" y="306" width="22" height="60" rx="5" fill="#0f172a"/>
+    <rect x="318" y="306" width="14" height="60" rx="4" fill="#0f172a"/>
+    <rect x="340" y="306" width="24" height="60" rx="5" fill="url(#mAccentGrad)"/>
+  </g>
+</svg>

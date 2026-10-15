@@ -1,11 +1,13 @@
 // QR Label Pro - PWA Service Worker (PWABuilder & Offline Certified)
-const CACHE_NAME = 'qr-label-pro-v3';
+const CACHE_NAME = 'qr-label-pro-v4';
 const OFFLINE_URL = '/';
 
 const PRECACHE_ASSETS = [
   '/',
   '/index.html',
   '/manifest.json',
+  '/icon.svg',
+  '/apple-touch-icon.png',
   '/favicon.png',
   '/icon-192.png',
   '/icon-512.png',

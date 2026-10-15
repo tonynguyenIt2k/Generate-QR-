@@ -1,11 +1,11 @@
 {
-  "id": "/?homescreen=1",
+  "id": "/",
   "name": "QR Label Pro - Thiết Kế & In Tem Nhãn",
   "short_name": "QR Label",
   "description": "Ứng dụng thiết kế và in tem nhãn mã vạch, mã QR chuyên nghiệp, nhập xuất dữ liệu Excel tốc độ cao.",
   "lang": "vi",
   "dir": "ltr",
-  "start_url": "/?homescreen=1",
+  "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "display_override": [
@@ -55,13 +55,19 @@
       "purpose": "any"
     },
     {
-      "src": "/icons/icon-192x192.png",
-      "sizes": "192x192",
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
       "type": "image/png",
       "purpose": "any"
     },
     {
       "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-192x192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
@@ -73,13 +79,13 @@
       "purpose": "any"
     },
     {
-      "src": "/icons/icon-512x512.png",
+      "src": "/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icon-512.png",
+      "src": "/icons/icon-512x512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
@@ -89,22 +95,6 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
-    }
-  ],
-  "screenshots": [
-    {
-      "src": "/icons/screenshot-desktop.png",
-      "sizes": "1280x720",
-      "type": "image/png",
-      "form_factor": "wide",
-      "label": "Giao diện thiết kế tem nhãn QR Label Pro trên máy tính"
-    },
-    {
-      "src": "/icons/screenshot-mobile.png",
-      "sizes": "750x1334",
-      "type": "image/png",
-      "form_factor": "narrow",
-      "label": "Giao diện xem và in ấn tem nhãn trên điện thoại Android"
     }
   ],
   "shortcuts": [

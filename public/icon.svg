@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Background Gradients -->
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="512" y2="512" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#3b82f6"/>
+      <stop offset="45%" stop-color="#4f46e5"/>
+      <stop offset="100%" stop-color="#1e1b4b"/>
+    </linearGradient>
+
+    <!-- Glass Glow -->
+    <radialGradient id="topGlow" cx="256" cy="60" r="280" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#60a5fa" stop-opacity="0.6"/>
+      <stop offset="100%" stop-color="#60a5fa" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Accent Emerald/Cyan Gradient -->
+    <linearGradient id="accentGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="100%" stop-color="#10b981"/>
+    </linearGradient>
+
+    <!-- Label Card Gradient -->
+    <linearGradient id="cardGrad" x1="100" y1="90" x2="412" y2="422" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#f1f5f9"/>
+    </linearGradient>
+
+    <!-- Drop Shadow Filter -->
+    <filter id="shadow" x="0" y="8" width="512" height="512" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="16" stdDeviation="24" flood-color="#0f172a" flood-opacity="0.45"/>
+    </filter>
+
+    <filter id="innerShadow" x="0" y="0" width="512" height="512">
+      <feDropShadow dx="0" dy="6" stdDeviation="8" flood-color="#0284c7" flood-opacity="0.3"/>
+    </filter>
+  </defs>
+
+  <!-- App Icon Base Squircle -->
+  <rect width="512" height="512" rx="115" fill="url(#bgGrad)"/>
+  <rect width="512" height="512" rx="115" fill="url(#topGlow)"/>
+
+  <!-- Subtle grid pattern in background -->
+  <g opacity="0.08" stroke="#ffffff" stroke-width="1.5">
+    <line x1="64" y1="0" x2="64" y2="512"/>
+    <line x1="128" y1="0" x2="128" y2="512"/>
+    <line x1="192" y1="0" x2="192" y2="512"/>
+    <line x1="256" y1="0" x2="256" y2="512"/>
+    <line x1="320" y1="0" x2="320" y2="512"/>
+    <line x1="384" y1="0" x2="384" y2="512"/>
+    <line x1="448" y1="0" x2="448" y2="512"/>
+    <line x1="0" y1="64" x2="512" y2="64"/>
+    <line x1="0" y1="128" x2="512" y2="128"/>
+    <line x1="0" y1="192" x2="512" y2="192"/>
+    <line x1="0" y1="256" x2="512" y2="256"/>
+    <line x1="0" y1="320" x2="512" y2="320"/>
+    <line x1="0" y1="384" x2="512" y2="384"/>
+    <line x1="0" y1="448" x2="512" y2="448"/>
+  </g>
+
+  <!-- Main Label Card Badge (Simulating thermal sticker) -->
+  <g filter="url(#shadow)">
+    <!-- White Thermal Label Sheet -->
+    <rect x="88" y="88" width="336" height="336" rx="44" fill="url(#cardGrad)"/>
+    <rect x="88" y="88" width="336" height="336" rx="44" stroke="#ffffff" stroke-width="4" stroke-opacity="0.9"/>
+  </g>
+
+  <!-- Top Ribbon Banner on the Label -->
+  <path d="M 88 132 C 88 107.7 107.7 88 132 88 L 380 88 C 404.3 88 424 107.7 424 132 L 424 142 L 88 142 Z" fill="#2563eb"/>
+  <!-- Mini Barcode marks on banner -->
+  <g fill="#ffffff" opacity="0.9">
+    <rect x="124" y="104" width="6" height="24" rx="2"/>
+    <rect x="136" y="104" width="12" height="24" rx="2"/>
+    <rect x="154" y="104" width="4" height="24" rx="2"/>
+    <rect x="164" y="104" width="8" height="24" rx="2"/>
+    <rect x="178" y="104" width="14" height="24" rx="2"/>
+    <rect x="198" y="104" width="4" height="24" rx="2"/>
+  </g>
+  <!-- Text PRO on ribbon -->
+  <text x="376" y="125" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="20" font-weight="900" fill="#ffffff" text-anchor="end" letter-spacing="2">LABEL PRO</text>
+
+  <!-- High-contrast QR Code Graphic centered inside the label -->
+  <g id="qrMatrix" fill="#0f172a">
+    <!-- Top-Left Finder Pattern (Outer Box) -->
+    <rect x="126" y="172" width="90" height="90" rx="20" fill="#0f172a"/>
+    <rect x="142" y="188" width="58" height="58" rx="10" fill="#ffffff"/>
+    <rect x="154" y="200" width="34" height="34" rx="6" fill="url(#accentGrad)"/>
+
+    <!-- Top-Right Finder Pattern (Outer Box) -->
+    <rect x="296" y="172" width="90" height="90" rx="20" fill="#0f172a"/>
+    <rect x="312" y="188" width="58" height="58" rx="10" fill="#ffffff"/>
+    <rect x="324" y="200" width="34" height="34" rx="6" fill="#2563eb"/>
+
+    <!-- Bottom-Left Finder Pattern (Outer Box) -->
+    <rect x="126" y="302" width="90" height="90" rx="20" fill="#0f172a"/>
+    <rect x="142" y="318" width="58" height="58" rx="10" fill="#ffffff"/>
+    <rect x="154" y="330" width="34" height="34" rx="6" fill="#4f46e5"/>
+
+    <!-- QR Data Dots & Alignment Modules -->
+    <rect x="236" y="172" width="22" height="22" rx="5" fill="#0f172a"/>
+    <rect x="236" y="206" width="22" height="22" rx="5" fill="#2563eb"/>
+    <rect x="236" y="240" width="22" height="22" rx="5" fill="#0f172a"/>
+
+    <rect x="126" y="272" width="22" height="18" rx="4" fill="#0f172a"/>
+    <rect x="160" y="272" width="22" height="18" rx="4" fill="#0f172a"/>
+    <rect x="194" y="272" width="22" height="18" rx="4" fill="#10b981"/>
+
+    <!-- Center Module -->
+    <rect x="236" y="274" width="40" height="40" rx="10" fill="url(#accentGrad)"/>
+    <circle cx="256" cy="294" r="8" fill="#ffffff"/>
+
+    <rect x="296" y="272" width="22" height="18" rx="4" fill="#0f172a"/>
+    <rect x="330" y="272" width="22" height="18" rx="4" fill="#0f172a"/>
+    <rect x="364" y="272" width="22" height="18" rx="4" fill="#2563eb"/>
+
+    <!-- Bottom-Right Modules (Barcode & QR hybrid lines) -->
+    <rect x="236" y="324" width="22" height="32" rx="5" fill="#0f172a"/>
+    <rect x="236" y="366" width="22" height="26" rx="5" fill="#4f46e5"/>
+
+    <rect x="270" y="324" width="26" height="68" rx="6" fill="#0f172a"/>
+    <rect x="308" y="324" width="18" height="68" rx="5" fill="#0f172a"/>
+    <rect x="338" y="324" width="28" height="68" rx="6" fill="url(#accentGrad)"/>
+    <rect x="378" y="324" width="8" height="68" rx="3" fill="#0f172a"/>
+  </g>
+
+  <!-- Clean Gloss Bevel Highlight at top border -->
+  <path d="M 115 4 C 180 4, 332 4, 397 4 C 458 4, 508 54, 508 115 C 508 140, 508 170, 508 190 C 470 170, 370 150, 256 150 C 142 150, 42 170, 4 190 C 4 170, 4 140, 4 115 C 4 54, 54 4, 115 4 Z" fill="#ffffff" opacity="0.12"/>
+</svg>

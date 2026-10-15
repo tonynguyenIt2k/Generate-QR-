@@ -113,6 +113,16 @@ export default function App() {
   const [allTemplates, setAllTemplates] = useState<LabelTemplate[]>(() => getAllTemplates());
   const [currentTemplate, setCurrentTemplate] = useState<LabelTemplate>(() => {
     try {
+      // Prioritize the newly requested "Tem Đã Sạc Pin 8 Con (40x30mm)" for immediate view & editing
+      const isChargedActivatedV2 = localStorage.getItem('qr_label_pro_initial_charged_selected_v2');
+      if (!isChargedActivatedV2) {
+        localStorage.setItem('qr_label_pro_initial_charged_selected_v2', 'true');
+        const chargedTpl = DEFAULT_TEMPLATES[0]; // tpl-charged-phone-8in1-40x30
+        localStorage.setItem('qr_label_pro_current_template', JSON.stringify(chargedTpl));
+        localStorage.setItem('qr_label_pro_elements', JSON.stringify(chargedTpl.elements));
+        return chargedTpl;
+      }
+
       const saved = localStorage.getItem('qr_label_pro_current_template');
       if (saved) {
         const parsed = JSON.parse(saved);
@@ -135,7 +145,7 @@ export default function App() {
       console.error('Error loading elements from localStorage', e);
     }
     return currentTemplate.elements;
-  }, []);
+  }, [currentTemplate]);
 
   // Label editor elements state with history
   const {

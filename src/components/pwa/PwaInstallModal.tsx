@@ -88,18 +88,21 @@ export const PwaInstallModal: React.FC<PwaInstallModalProps> = ({
         {/* Mobile Pull Handle Bar */}
         <div className="sm:hidden w-12 h-1.5 bg-slate-300 dark:bg-slate-700 rounded-full mx-auto my-2.5 shrink-0" />
 
-        {/* Header */}
+        {/* Header with App Logo */}
         <div className="px-4 sm:px-6 py-3.5 sm:py-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50/90 dark:bg-slate-900 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
-            <div className="p-2 sm:p-2.5 bg-gradient-to-br from-indigo-500 to-blue-600 text-white rounded-2xl shadow-md shadow-indigo-500/20 shrink-0">
-              <Smartphone className="w-5 h-5" />
+            <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl overflow-hidden shadow-lg shadow-indigo-500/20 shrink-0 border border-slate-200/80 dark:border-slate-700">
+              <img src="/icon.svg" alt="QR Label Pro Logo" className="w-full h-full object-cover" />
             </div>
             <div>
-              <h2 className="text-sm sm:text-base font-extrabold text-slate-900 dark:text-white leading-tight">
-                Cài Đặt & Sử Dụng App Native
-              </h2>
+              <div className="flex items-center gap-1.5">
+                <h2 className="text-sm sm:text-base font-extrabold text-slate-900 dark:text-white leading-tight">
+                  Cài Đặt QR Label Pro
+                </h2>
+                <span className="px-1.5 py-0.5 text-[10px] font-bold bg-blue-100 dark:bg-blue-900/60 text-blue-600 dark:text-blue-300 rounded-md">Web App</span>
+              </div>
               <p className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                Chạy Full màn hình không thanh duyệt web, hỗ trợ offline 100%
+                Hiển thị logo trên màn hình chính & full màn hình không viền
               </p>
             </div>
           </div>
@@ -219,13 +222,20 @@ export const PwaInstallModal: React.FC<PwaInstallModalProps> = ({
                 <div className="w-6 h-6 rounded-full bg-emerald-600 text-white font-bold flex items-center justify-center text-xs shrink-0 mt-0.5 shadow-xs">
                   2
                 </div>
-                <div>
+                <div className="flex-1">
                   <p className="font-bold text-slate-900 dark:text-white">
                     Chọn "Cài đặt ứng dụng" hoặc "Thêm vào màn hình chính"
                   </p>
                   <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                    Hệ thống Android sẽ tự động tạo icon <span className="font-bold text-emerald-600 dark:text-emerald-400">QR Label Pro</span> ngoài màn hình chính.
+                    Hệ thống sẽ cài đặt icon chính thức ngoài màn hình điện thoại:
                   </p>
+                  <div className="mt-2 flex items-center gap-2.5 p-2 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 w-fit">
+                    <img src="/icons/icon-96x96.png" alt="Icon" className="w-9 h-9 rounded-xl shadow-sm" />
+                    <div>
+                      <span className="text-xs font-bold text-slate-900 dark:text-white block">QR Label Pro</span>
+                      <span className="text-[10px] text-emerald-600 dark:text-emerald-400">Đã tích hợp logo chuẩn</span>
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -287,13 +297,20 @@ export const PwaInstallModal: React.FC<PwaInstallModalProps> = ({
                 <div className="w-6 h-6 rounded-full bg-blue-600 text-white font-bold flex items-center justify-center text-xs shrink-0 mt-0.5 shadow-xs">
                   2
                 </div>
-                <div>
+                <div className="flex-1">
                   <p className="font-bold text-slate-900 dark:text-white">
                     Chọn "Thêm vào MH chính" (Add to Home Screen)
                   </p>
                   <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 flex items-center gap-1">
                     Cuộn danh sách xuống và chọn dòng có biểu tượng <PlusSquare className="w-3.5 h-3.5 text-slate-600 dark:text-slate-300 inline" />.
                   </p>
+                  <div className="mt-2 flex items-center gap-2.5 p-2 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 w-fit">
+                    <img src="/apple-touch-icon.png" alt="Apple Touch Icon" className="w-9 h-9 rounded-xl shadow-sm" />
+                    <div>
+                      <span className="text-xs font-bold text-slate-900 dark:text-white block">QR Label Pro</span>
+                      <span className="text-[10px] text-blue-600 dark:text-blue-400">Apple Touch Icon</span>
+                    </div>
+                  </div>
                 </div>
               </div>
 
